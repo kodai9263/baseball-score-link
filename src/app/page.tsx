@@ -149,12 +149,16 @@ export default function Home() {
             <RecentPlays events={game.events} />
           </Panel>
 
+        </div>
+
+        {/* 紙スコアは横幅が要るので、lg以上では下段の全幅に置いてマスを大きく見せる */}
+        <div className="mt-4 lg:col-span-2 lg:mt-2">
           <Panel
             title="紙スコア風プレビュー"
             icon={<FileText size={18} aria-hidden="true" />}
             description="入力済みの記録から作る出力プレビューです。ここでは編集できません。"
           >
-            <PaperScorePreview events={game.events} innings={innings} />
+            <PaperScorePreview events={game.events} innings={innings} currentInning={game.inning} />
           </Panel>
         </div>
       </main>
