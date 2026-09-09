@@ -77,3 +77,21 @@ export function nextHalfInning(state: GameState, outsAfterPlay: number): Pick<Ga
     bases: { first: null, second: null, third: null }
   };
 }
+
+/**
+ * イニング別得点。表と裏を分けて集計する。
+ * 集計対象の回は呼び出し側から渡す（延長時は6回より伸びる）。
+ */
+export function buildScoreByInning(events: PlayEvent[], innings: string[]) {
+  return innings.map((inningLabel) => {
+    const inning = Number(inningLabel);
+    const topRuns = events
+      .filter((event) => event.inning === inning && event.half === "top")
+      .reduce((total, event) => total + event.runsScored.length, 0);
+    const bottomRuns = events
+      .filter((event) => event.inning === inning && event.half === "bottom")
+      .reduce((total, event) => total + event.runsScored.length, 0);
+
+    return { inning: inningLabel, topRuns, bottomRuns };
+  });
+}

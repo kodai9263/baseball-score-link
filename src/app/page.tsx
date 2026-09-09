@@ -11,8 +11,8 @@ import { RecentPlays } from "@/components/score/RecentPlays";
 import { RecordBar } from "@/components/score/RecordBar";
 import { ResultPicker } from "@/components/score/ResultPicker";
 import { Scoreboard } from "@/components/score/Scoreboard";
-import { advanceRunners, nextHalfInning } from "@/lib/game-engine";
-import { getPlayer, initialGameState, inningLabels, lineup, resultLabels, teams } from "@/lib/score-data";
+import { advanceRunners, buildScoreByInning, nextHalfInning } from "@/lib/game-engine";
+import { buildInningLabels, getPlayer, initialGameState, lineup, resultLabels, teams } from "@/lib/score-data";
 import { hasSupabaseConfig } from "@/lib/supabase";
 import type { GameState, PlateAppearanceResult, PlayEvent } from "@/lib/types";
 
@@ -22,19 +22,9 @@ export default function Home() {
   const currentLineup = lineup[game.battingOrderIndex % lineup.length];
   const currentBatter = getPlayer(currentLineup.playerId);
 
-  const scoreByInning = useMemo(() => {
-    return inningLabels.map((inningLabel) => {
-      const inning = Number(inningLabel);
-      const topRuns = game.events
-        .filter((event) => event.inning === inning && event.half === "top")
-        .reduce((total, event) => total + event.runsScored.length, 0);
-      const bottomRuns = game.events
-        .filter((event) => event.inning === inning && event.half === "bottom")
-        .reduce((total, event) => total + event.runsScored.length, 0);
-
-      return { inning: inningLabel, topRuns, bottomRuns };
-    });
-  }, [game.events]);
+  // 延長したら表示する回を伸ばす。伸ばさないと7回以降の得点が「計」にだけ乗ってしまう
+  const innings = useMemo(() => buildInningLabels(game.inning), [game.inning]);
+  const scoreByInning = useMemo(() => buildScoreByInning(game.events, innings), [game.events, innings]);
 
   const recordPlay = () => {
     const transition = advanceRunners(game, currentBatter.id, selectedResult);
@@ -150,6 +140,7 @@ export default function Home() {
           >
             <LineScore
               currentInning={game.inning}
+              innings={innings}
               rows={buildLineScoreRows(scoreByInning, game.awayScore, game.homeScore)}
             />
           </Panel>
@@ -163,7 +154,7 @@ export default function Home() {
             icon={<FileText size={18} aria-hidden="true" />}
             description="入力済みの記録から作る出力プレビューです。ここでは編集できません。"
           >
-            <PaperScorePreview events={game.events} />
+            <PaperScorePreview events={game.events} innings={innings} />
           </Panel>
         </div>
       </main>

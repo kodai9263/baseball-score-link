@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { advanceRunners, nextHalfInning } from "./game-engine";
-import { initialGameState } from "./score-data";
-import type { GameState, RunnerState } from "./types";
+import { advanceRunners, buildScoreByInning, nextHalfInning } from "./game-engine";
+import { buildInningLabels, initialGameState } from "./score-data";
+import type { GameState, PlayEvent, RunnerState } from "./types";
 
 const bases = (first: string | null, second: string | null, third: string | null): RunnerState => ({
   first,
@@ -143,5 +143,56 @@ describe("nextHalfInning", () => {
     const current = state({ inning: 3, half: "bottom", bases: bases("r1", null, null) });
 
     expect(nextHalfInning(current, 4)).toEqual({ inning: 4, half: "top", outs: 0, bases: empty });
+  });
+});
+
+describe("buildInningLabels", () => {
+  it("6回までは常に6列出す", () => {
+    expect(buildInningLabels(1)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(buildInningLabels(6)).toEqual(["1", "2", "3", "4", "5", "6"]);
+  });
+
+  it("延長したら現在の回まで伸ばす", () => {
+    expect(buildInningLabels(8)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
+  });
+});
+
+describe("buildScoreByInning", () => {
+  const run = (inning: number, half: PlayEvent["half"], runners: string[]): PlayEvent => ({
+    id: `${inning}-${half}-${runners.join()}`,
+    inning,
+    half,
+    batterId: "batter",
+    result: "single",
+    notation: "1B",
+    rbi: runners.length,
+    outsAdded: 0,
+    runsScored: runners,
+    basesAfter: bases(null, null, null),
+    scoringStatus: "provisional"
+  });
+
+  it("表と裏の得点を回ごとに分けて数える", () => {
+    const events = [run(1, "top", ["a", "b"]), run(1, "bottom", ["c"]), run(3, "top", ["d"])];
+
+    expect(buildScoreByInning(events, buildInningLabels(3))).toEqual([
+      { inning: "1", topRuns: 2, bottomRuns: 1 },
+      { inning: "2", topRuns: 0, bottomRuns: 0 },
+      { inning: "3", topRuns: 1, bottomRuns: 0 },
+      { inning: "4", topRuns: 0, bottomRuns: 0 },
+      { inning: "5", topRuns: 0, bottomRuns: 0 },
+      { inning: "6", topRuns: 0, bottomRuns: 0 }
+    ]);
+  });
+
+  it("延長回の得点も列に出る（各回の合計と計が食い違わない）", () => {
+    const events = [run(1, "top", ["a"]), run(8, "bottom", ["b", "c"])];
+    const rows = buildScoreByInning(events, buildInningLabels(8));
+
+    expect(rows).toHaveLength(8);
+    expect(rows[7]).toEqual({ inning: "8", topRuns: 0, bottomRuns: 2 });
+
+    const total = rows.reduce((sum, row) => sum + row.topRuns + row.bottomRuns, 0);
+    expect(total).toBe(3);
   });
 });

@@ -60,8 +60,16 @@ export const teams = {
   home: { name: "東台イーグルス", short: "東台" }
 } as const;
 
-/** MVPで表示するイニング数 */
-export const inningLabels = ["1", "2", "3", "4", "5", "6"];
+/** 標準の回数。少年野球の多くはここで終わるので、得点がなくても常にこの数だけ列を出す */
+export const regulationInnings = 6;
+
+/**
+ * 表示するイニングの並び。
+ * 延長したときは現在の回まで伸ばす。伸ばさないと7回以降の得点が
+ * 「計」にだけ乗り、各回の合計と食い違ってしまう。
+ */
+export const buildInningLabels = (currentInning: number): string[] =>
+  Array.from({ length: Math.max(regulationInnings, currentInning) }, (_, index) => String(index + 1));
 
 /**
  * 打席結果を意味で3群に分ける。

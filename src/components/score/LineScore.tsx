@@ -1,7 +1,9 @@
-import { inningLabels, teams } from "@/lib/score-data";
+import { teams } from "@/lib/score-data";
 
 type LineScoreProps = {
   currentInning: number;
+  /** 表示するイニング。延長したときは6回より伸びる */
+  innings: string[];
   rows: Array<{ team: string; values: number[]; total: number }>;
 };
 
@@ -9,11 +11,14 @@ type LineScoreProps = {
  * イニング別得点。
  * チーム名列と合計列を左右に固定し、モバイルで横スクロールしても合計が見切れないようにする。
  */
-export function LineScore({ currentInning, rows }: LineScoreProps) {
+export function LineScore({ currentInning, innings, rows }: LineScoreProps) {
+  // チーム名116px + 各回44px + 合計56px
+  const minWidth = 116 + innings.length * 44 + 56;
+
   return (
     <div className="overflow-x-auto rounded-control border border-line">
       {/* sticky を効かせるため border-collapse は使わず、罫線はセル側に持たせる */}
-      <table className="w-full min-w-[440px] border-separate border-spacing-0 text-sm">
+      <table className="w-full border-separate border-spacing-0 text-sm" style={{ minWidth }}>
         <caption className="sr-only">イニング別得点</caption>
         <thead>
           <tr>
@@ -23,7 +28,7 @@ export function LineScore({ currentInning, rows }: LineScoreProps) {
             >
               チーム
             </th>
-            {inningLabels.map((inning) => {
+            {innings.map((inning) => {
               const isCurrent = Number(inning) === currentInning;
 
               return (
