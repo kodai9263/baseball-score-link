@@ -1,6 +1,6 @@
-import type { GameState, LineupSlot, Player, PlateAppearanceResult } from "./types";
+import type { GameState, Half, LineupSlot, Player, PlateAppearanceResult } from "./types";
 
-export const players: Player[] = [
+const awayPlayers: Player[] = [
   { id: "p1", number: 10, name: "佐藤 湊", grade: "6年", position: "投手", bats: "右", throws: "右" },
   { id: "p2", number: 2, name: "高橋 蓮", grade: "6年", position: "捕手", bats: "右", throws: "右" },
   { id: "p3", number: 3, name: "田中 陽", grade: "5年", position: "一塁手", bats: "左", throws: "左" },
@@ -12,11 +12,30 @@ export const players: Player[] = [
   { id: "p9", number: 9, name: "加藤 海", grade: "5年", position: "右翼手", bats: "右", throws: "右" }
 ];
 
-export const lineup: LineupSlot[] = players.map((player, index) => ({
+// 既存の選手IDは先攻側に残し、後攻側には別のIDを割り当てる。
+const homePlayers: Player[] = awayPlayers.map((player, index) => ({
+  ...player,
+  id: `home-p${index + 1}`,
+  name: `東台 選手${index + 1}`
+}));
+
+export const players: Player[] = [...awayPlayers, ...homePlayers];
+
+const buildLineup = (roster: Player[]): LineupSlot[] => roster.map((player, index) => ({
   order: index + 1,
   playerId: player.id,
   position: player.position
 }));
+
+export const lineups: Record<Half, LineupSlot[]> = {
+  top: buildLineup(awayPlayers),
+  bottom: buildLineup(homePlayers)
+};
+
+export const getCurrentLineupSlot = (game: GameState): LineupSlot => {
+  const lineup = lineups[game.half];
+  return lineup[game.battingOrderIndex[game.half] % lineup.length];
+};
 
 export const resultLabels: Record<PlateAppearanceResult, { label: string; notation: string }> = {
   single: { label: "単打", notation: "1B" },
@@ -36,7 +55,7 @@ export const initialGameState: GameState = {
   inning: 1,
   half: "top",
   outs: 0,
-  battingOrderIndex: 0,
+  battingOrderIndex: { top: 0, bottom: 0 },
   homeScore: 0,
   awayScore: 0,
   bases: { first: null, second: null, third: null },

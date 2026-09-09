@@ -57,7 +57,7 @@ export type GameState = {
   inning: number;
   half: Half;
   outs: number;
-  battingOrderIndex: number;
+  battingOrderIndex: Record<Half, number>;
   homeScore: number;
   awayScore: number;
   bases: RunnerState;

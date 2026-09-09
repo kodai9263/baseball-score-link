@@ -95,3 +95,31 @@ export function buildScoreByInning(events: PlayEvent[], innings: string[]) {
     return { inning: inningLabel, topRuns, bottomRuns };
   });
 }
+
+
+/** 記録済みの進塁・得点を適用する。取消時も再計算せず同じ処理で復元する。 */
+export function applyPlayEvent(state: GameState, event: PlayEvent): GameState {
+  const transition = nextHalfInning(
+    { ...state, inning: event.inning, half: event.half, bases: event.basesAfter },
+    state.outs + event.outsAdded
+  );
+
+  return {
+    ...state,
+    ...transition,
+    battingOrderIndex: {
+      ...state.battingOrderIndex,
+      [event.half]: state.battingOrderIndex[event.half] + 1
+    },
+    awayScore: state.awayScore + (event.half === "top" ? event.runsScored.length : 0),
+    homeScore: state.homeScore + (event.half === "bottom" ? event.runsScored.length : 0),
+    events: [...state.events, event],
+    status: "provisional"
+  };
+}
+
+/** 直前の打席を取り消し、両チームの打順を含む試合状況を復元する。 */
+export function undoLastPlay(state: GameState, initialState: GameState): GameState {
+  if (state.events.length === 0) return state;
+  return state.events.slice(0, -1).reduce(applyPlayEvent, initialState);
+}

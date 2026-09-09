@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { advanceRunners, buildScoreByInning, nextHalfInning } from "./game-engine";
-import { buildInningLabels, initialGameState } from "./score-data";
-import type { GameState, PlayEvent, RunnerState } from "./types";
+import { advanceRunners, applyPlayEvent, buildScoreByInning, nextHalfInning, undoLastPlay } from "./game-engine";
+import { buildInningLabels, getCurrentLineupSlot, initialGameState } from "./score-data";
+import type { GameState, PlateAppearanceResult, PlayEvent, RunnerState } from "./types";
 
 const bases = (first: string | null, second: string | null, third: string | null): RunnerState => ({
   first,
@@ -194,5 +194,76 @@ describe("buildScoreByInning", () => {
 
     const total = rows.reduce((sum, row) => sum + row.topRuns + row.bottomRuns, 0);
     expect(total).toBe(3);
+  });
+});
+
+describe("チーム別の打順と取消", () => {
+  const play = (game: GameState, result: PlateAppearanceResult = "strikeout"): GameState => {
+    const batter = getCurrentLineupSlot(game);
+    return applyPlayEvent(game, {
+      id: `test-${game.events.length}`,
+      inning: game.inning,
+      half: game.half,
+      batterId: batter.playerId,
+      result,
+      notation: result,
+      ...advanceRunners(game, batter.playerId, result),
+      scoringStatus: "provisional"
+    });
+  };
+  const strikeouts = (game: GameState, count: number) =>
+    Array.from({ length: count }).reduce<GameState>((current) => play(current), game);
+
+  it("表を3人で終えても裏は別チームの1番から始まり、2回表は4番に戻る", () => {
+    const bottom = strikeouts(initialGameState, 3);
+    expect(bottom.half).toBe("bottom");
+    expect(getCurrentLineupSlot(bottom)).toMatchObject({ order: 1, playerId: "home-p1" });
+    const topSecond = strikeouts(bottom, 3);
+    expect(topSecond.inning).toBe(2);
+    expect(getCurrentLineupSlot(topSecond)).toMatchObject({ order: 4, playerId: "p4" });
+    expect(topSecond.battingOrderIndex).toEqual({ top: 3, bottom: 3 });
+  });
+
+  it("打者一巡と延長でも相手の打順を進めない", () => {
+    let game = Array.from({ length: 9 }).reduce<GameState>((current) => play(current, "home_run"), initialGameState);
+    expect(getCurrentLineupSlot(game).order).toBe(1);
+    expect(game.awayScore).toBe(9);
+    expect(game.battingOrderIndex.bottom).toBe(0);
+    game = strikeouts(game, 42);
+    expect(game.inning).toBe(8);
+    expect(game.half).toBe("top");
+    expect(getCurrentLineupSlot(game).order).toBe(4);
+    expect(game.battingOrderIndex).toEqual({ top: 30, bottom: 21 });
+  });
+
+  it("表裏の境界で取消すると2アウトの走者と打順まで戻る", () => {
+    const before = strikeouts(play(initialGameState, "single"), 2);
+    const after = play(before);
+    expect(after.half).toBe("bottom");
+    expect(after.bases).toEqual(empty);
+    expect(undoLastPlay(after, initialGameState)).toEqual(before);
+  });
+
+  it("裏の得点と回の切替を取り消しても表の得点・打順は変わらない", () => {
+    const bottom = strikeouts(play(initialGameState, "home_run"), 3);
+    const scored = play(bottom, "home_run");
+    expect(scored.homeScore).toBe(1);
+    expect(undoLastPlay(scored, initialGameState)).toEqual(bottom);
+    const before = strikeouts(scored, 2);
+    expect(undoLastPlay(play(before), initialGameState)).toEqual(before);
+  });
+
+  it("保存された進塁結果を再計算せず復元する", () => {
+    const game = play(initialGameState, "single");
+    const saved = { ...game.events[0], basesAfter: bases(null, "p1", null) };
+    const restored = applyPlayEvent(initialGameState, saved);
+    expect(undoLastPlay(play(restored), initialGameState).bases).toEqual(saved.basesAfter);
+  });
+
+  it("全件取り消すと初期状態になり、空の取消も安全", () => {
+    let game = strikeouts(initialGameState, 6);
+    for (let i = 0; i < 6; i += 1) game = undoLastPlay(game, initialGameState);
+    expect(game).toEqual(initialGameState);
+    expect(undoLastPlay(game, initialGameState)).toEqual(initialGameState);
   });
 });

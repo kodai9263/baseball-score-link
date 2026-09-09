@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { MoveHorizontal } from "lucide-react";
 import { buildCellRecord, buildPlayerSummary, findPlateAppearances } from "@/lib/paper-score";
 import type { CellRecord } from "@/lib/paper-score";
-import { getPlayer, lineup, resultLabels } from "@/lib/score-data";
-import type { PlayEvent } from "@/lib/types";
+import { getPlayer, lineups, resultLabels, teams } from "@/lib/score-data";
+import type { Half, PlayEvent } from "@/lib/types";
 
 type PaperScorePreviewProps = {
   events: PlayEvent[];
   /** 表示するイニング。延長したときは6回より伸びる */
   innings: string[];
   currentInning: number;
+  currentHalf: Half;
 };
 
 const baseWords = ["アウト", "一塁", "二塁", "三塁", "生還"] as const;
@@ -169,7 +170,24 @@ function SummaryCell({ value, emphasized = false }: { value: number; emphasized?
  * 紙スコア風プレビュー。
  * これは入力UIではなく出力プレビューなので、罫線と記号の可読性を優先し装飾は足さない。
  */
-export function PaperScorePreview({ events, innings, currentInning }: PaperScorePreviewProps) {
+export function PaperScorePreview(props: PaperScorePreviewProps) {
+  return (
+    <div className="space-y-6">
+      {(["top", "bottom"] as const).map((half) => (
+        <TeamPaperScore
+          key={half}
+          {...props}
+          half={half}
+          events={props.events.filter((event) => event.half === half)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: PaperScorePreviewProps & { half: Half }) {
+  const teamName = half === "top" ? teams.away.name : teams.home.name;
+  const lineup = lineups[half];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScroll, setCanScroll] = useState(false);
 
@@ -192,7 +210,10 @@ export function PaperScorePreview({ events, innings, currentInning }: PaperScore
   const minWidth = 128 + innings.length * 88 + 176;
 
   return (
-    <div>
+    <section aria-label={`${teamName}の紙スコア`}>
+      <h3 className="mb-2 text-sm font-bold text-ink">
+        {teamName}（{half === "top" ? "先攻・表" : "後攻・裏"}）
+      </h3>
       {canScroll ? (
         <p className="mb-2 flex items-center gap-1.5 text-xs text-muted">
           <MoveHorizontal size={14} aria-hidden="true" />
@@ -205,13 +226,13 @@ export function PaperScorePreview({ events, innings, currentInning }: PaperScore
           className="grid text-sm"
           style={{ gridTemplateColumns, minWidth }}
           role="group"
-          aria-label="打順ごとの打席結果プレビュー"
+          aria-label={`${teamName}の打順ごとの打席結果プレビュー`}
         >
           <div className="border-b border-r border-line bg-sunken px-2 py-2.5 text-xs font-bold text-muted">
             打順
           </div>
           {innings.map((inning) => {
-            const isCurrent = Number(inning) === currentInning;
+            const isCurrent = Number(inning) === currentInning && half === currentHalf;
 
             return (
               <div
@@ -252,7 +273,7 @@ export function PaperScorePreview({ events, innings, currentInning }: PaperScore
                 {innings.map((inning) => (
                   <ScoreCell
                     key={`${player.id}-${inning}`}
-                    cellName={`${inning}回 ${slot.order}番 ${player.name}`}
+                    cellName={`${inning}回${half === "top" ? "表" : "裏"} ${slot.order}番 ${player.name}`}
                     records={findPlateAppearances(events, player.id, Number(inning)).map((index) =>
                       buildCellRecord(events, index)
                     )}
@@ -275,6 +296,6 @@ export function PaperScorePreview({ events, innings, currentInning }: PaperScore
         <span className="font-mono font-bold">II</span> / <span className="font-mono font-bold">III</span>、生還なら ●、残塁なら ℓ です。
         アウトになったプレーの記号には下線、3アウトチェンジは右下角の斜線2本、左下の点は打点を示します。
       </p>
-    </div>
+    </section>
   );
 }
