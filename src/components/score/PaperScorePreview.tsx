@@ -13,13 +13,19 @@ type PaperScorePreviewProps = {
 const baseWords = ["アウト", "一塁", "二塁", "三塁", "生還"] as const;
 
 /**
- * 打席1つ分の菱形。
- * 走者が通った塁間を太線で描き、生還したら塗りつぶす早稲田式寄りの表現にする。
+ * 打席1つ分のマス。早稲田式の記入法に合わせている。
+ *
+ * - ひし形の頂点が各塁。下=本塁、右=一塁、上=二塁、左=三塁
+ * - 走者が到達した塁まで塁間に斜線を引く
+ * - 打席結果の記号は一塁の区画（右下）に書く
+ * - 中央には、アウトなら I / II / III、生還なら ●、残塁なら ℓ を置く
+ * - アウトになったプレーの記号にはアンダーラインを引く
+ * - 3アウトチェンジのときはマスの右下角に斜線2本を入れる
  */
 function DiamondMark({ record, label }: { record: CellRecord | null; label: string | null }) {
   const reached = record?.reached ?? 0;
-  const scored = reached === 4;
   const traveled = (leg: number) => reached >= leg;
+  const isOut = Boolean(record?.outNumber);
 
   return (
     <svg
@@ -29,63 +35,72 @@ function DiamondMark({ record, label }: { record: CellRecord | null; label: stri
       aria-label={label ?? undefined}
       aria-hidden={label ? undefined : true}
     >
-      {/* 空欄でも菱形の罫は残し、白紙のスコアブックに見えるようにする */}
-      <polygon
-        points="36,64 64,36 36,8 8,36"
-        fill={scored ? "var(--color-primary)" : "none"}
-        stroke="var(--color-line)"
-        strokeWidth="1"
-      />
+      {/* 空欄でも塁の罫は残し、白紙のスコアブックに見えるようにする */}
+      <polygon points="36,62 62,36 36,10 10,36" fill="none" stroke="var(--color-line)" strokeWidth="1" />
 
-      {/* 走者が通過した塁間。本塁→一塁→二塁→三塁→本塁の順に太線で重ねる */}
+      {/* 到達した塁まで塁間に斜線を引く。本塁→一塁→二塁→三塁→本塁の順 */}
       <g stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round">
-        {traveled(1) ? <line x1="36" y1="64" x2="64" y2="36" /> : null}
-        {traveled(2) ? <line x1="64" y1="36" x2="36" y2="8" /> : null}
-        {traveled(3) ? <line x1="36" y1="8" x2="8" y2="36" /> : null}
-        {traveled(4) ? <line x1="8" y1="36" x2="36" y2="64" /> : null}
+        {traveled(1) ? <line x1="36" y1="62" x2="62" y2="36" /> : null}
+        {traveled(2) ? <line x1="62" y1="36" x2="36" y2="10" /> : null}
+        {traveled(3) ? <line x1="36" y1="10" x2="10" y2="36" /> : null}
+        {traveled(4) ? <line x1="10" y1="36" x2="36" y2="62" /> : null}
       </g>
 
-      {/* 打点は左下に点で示す（紙スコアの慣習） */}
-      {record && record.event.rbi > 0
-        ? Array.from({ length: Math.min(record.event.rbi, 4) }).map((_, index) => (
-            <circle key={index} cx={6 + index * 7} cy={68} r="2.2" fill="var(--color-ink)" />
-          ))
-        : null}
-
-      {/* アウトはその回の何個目かを丸囲みで右上に置く */}
+      {/* 中央。アウト数・得点・残塁は同時に起こらないので同じ場所を使う */}
       {record?.outNumber ? (
-        <>
-          <circle cx="62" cy="10" r="8" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="1.2" />
-          <text
-            x="62"
-            y="14"
-            textAnchor="middle"
-            className="fill-ink text-[11px] font-bold"
-            style={{ fontFamily: "var(--font-mono)" }}
-          >
-            {record.outNumber}
-          </text>
-        </>
-      ) : null}
-
-      {/* 打席結果の記号。線と重なっても読めるよう下地色で縁取る */}
-      {record ? (
         <text
           x="36"
           y="41"
           textAnchor="middle"
-          className="text-[14px] font-bold"
-          style={{
-            fontFamily: "var(--font-mono)",
-            fill: scored ? "#ffffff" : "var(--color-ink)",
-            stroke: scored ? "var(--color-primary)" : "var(--color-surface)",
-            strokeWidth: 3,
-            paintOrder: "stroke"
-          }}
+          className="fill-ink text-[15px] font-bold"
+          style={{ fontFamily: "var(--font-mono)" }}
         >
-          {record.event.notation}
+          {"I".repeat(record.outNumber)}
         </text>
       ) : null}
+      {reached === 4 ? <circle cx="36" cy="36" r="6" fill="var(--color-primary)" /> : null}
+      {record?.leftOnBase ? (
+        <text x="36" y="42" textAnchor="middle" className="fill-muted text-[17px] italic">
+          ℓ
+        </text>
+      ) : null}
+
+      {/* 打席結果の記号は一塁の区画（右下）。アウトのプレーにはアンダーラインを引く */}
+      {record ? (
+        <>
+          <text
+            x="51"
+            y="59"
+            textAnchor="middle"
+            className="text-[11px] font-bold"
+            style={{
+              fontFamily: "var(--font-mono)",
+              fill: "var(--color-ink)",
+              stroke: "var(--color-surface)",
+              strokeWidth: 3,
+              paintOrder: "stroke"
+            }}
+          >
+            {record.event.notation}
+          </text>
+          {isOut ? <line x1="39" y1="62" x2="63" y2="62" stroke="var(--color-ink)" strokeWidth="1" /> : null}
+        </>
+      ) : null}
+
+      {/* 3アウトチェンジは右下角に斜線2本 */}
+      {record?.outNumber === 3 ? (
+        <g stroke="var(--color-ink)" strokeWidth="1.4" strokeLinecap="round">
+          <line x1="61" y1="71" x2="71" y2="61" />
+          <line x1="65" y1="71" x2="71" y2="65" />
+        </g>
+      ) : null}
+
+      {/* 打点は左下に点で示す */}
+      {record && record.event.rbi > 0
+        ? Array.from({ length: Math.min(record.event.rbi, 4) }).map((_, index) => (
+            <circle key={index} cx={5 + index * 6} cy={68} r="2" fill="var(--color-ink)" />
+          ))
+        : null}
     </svg>
   );
 }
@@ -95,6 +110,7 @@ function describe(cellName: string, record: CellRecord, order: string) {
     cellName + order,
     resultLabels[record.event.result].label,
     baseWords[record.reached],
+    record.leftOnBase ? "残塁" : null,
     record.outNumber ? `この回${record.outNumber}アウト目` : null,
     record.event.rbi > 0 ? `打点${record.event.rbi}` : null
   ]
@@ -221,8 +237,11 @@ export function PaperScorePreview({ events, innings }: PaperScorePreviewProps) {
         </div>
       </div>
 
-      <p className="mt-2 text-xs text-muted">
-        菱形は走者の進塁を表します。塁間の太線は到達した塁、塗りつぶしは生還、右上の丸数字はその回の何アウト目か、左下の点は打点です。
+      <p className="mt-2 text-xs leading-relaxed text-muted">
+        早稲田式の記入法に合わせています。ひし形の頂点は下から反時計回りに本塁・一塁・二塁・三塁で、塁間の太線は走者が到達した塁を表します。
+        打席結果の記号は一塁側（右下）、中央はアウトなら <span className="font-mono font-bold">I</span> /{" "}
+        <span className="font-mono font-bold">II</span> / <span className="font-mono font-bold">III</span>、生還なら ●、残塁なら ℓ です。
+        アウトになったプレーの記号には下線、3アウトチェンジは右下角の斜線2本、左下の点は打点を示します。
       </p>
     </div>
   );

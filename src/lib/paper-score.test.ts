@@ -140,3 +140,49 @@ describe("buildPlayerSummary", () => {
     expect(buildPlayerSummary(events, "a")).toEqual({ atBats: 1, hits: 0, rbi: 0, runs: 0 });
   });
 });
+
+describe("buildCellRecord / 残塁", () => {
+  it("3アウトで回が終わり塁に残っていれば残塁になる", () => {
+    const events = [
+      event({ batterId: "a", result: "single", basesAfter: bases("a", null, null) }),
+      event({ batterId: "b", result: "strikeout", outsAdded: 1, basesAfter: bases("a", null, null) }),
+      event({ batterId: "c", result: "strikeout", outsAdded: 1, basesAfter: bases("a", null, null) }),
+      event({ batterId: "d", result: "strikeout", outsAdded: 1, basesAfter: bases("a", null, null) })
+    ];
+
+    expect(buildCellRecord(events, 0).leftOnBase).toBe(true);
+  });
+
+  it("回が続いている間は残塁にしない", () => {
+    const events = [
+      event({ batterId: "a", result: "single", basesAfter: bases("a", null, null) }),
+      event({ batterId: "b", result: "strikeout", outsAdded: 1, basesAfter: bases("a", null, null) })
+    ];
+
+    expect(buildCellRecord(events, 0).leftOnBase).toBe(false);
+  });
+
+  it("生還していれば残塁にはならない", () => {
+    const events = [
+      event({ batterId: "a", result: "single", basesAfter: bases("a", null, null) }),
+      event({ batterId: "b", result: "home_run", runsScored: ["a", "b"], rbi: 2 }),
+      event({ batterId: "c", result: "strikeout", outsAdded: 1 }),
+      event({ batterId: "d", result: "strikeout", outsAdded: 1 }),
+      event({ batterId: "e", result: "strikeout", outsAdded: 1 })
+    ];
+
+    const record = buildCellRecord(events, 0);
+    expect(record.reached).toBe(4);
+    expect(record.leftOnBase).toBe(false);
+  });
+
+  it("アウトになった打者は残塁にならない", () => {
+    const events = [
+      event({ batterId: "a", result: "strikeout", outsAdded: 1 }),
+      event({ batterId: "b", result: "strikeout", outsAdded: 1 }),
+      event({ batterId: "c", result: "strikeout", outsAdded: 1 })
+    ];
+
+    expect(buildCellRecord(events, 0).leftOnBase).toBe(false);
+  });
+});

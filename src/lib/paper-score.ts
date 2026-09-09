@@ -17,6 +17,8 @@ export type CellRecord = {
   reached: Reached;
   /** その半回で何個目のアウトだったか。アウトでなければ null */
   outNumber: number | null;
+  /** その半回が終わり、塁に残ったまま（残塁）になったか */
+  leftOnBase: boolean;
 };
 
 /** ある選手のその回の打席を、記録順にすべて返す。打者一巡すると同じ回に複数入る */
@@ -65,6 +67,8 @@ export function buildCellRecord(events: PlayEvent[], index: number): CellRecord 
     }
   }
 
+  const sameHalf = events.filter((item) => item.inning === event.inning && item.half === event.half);
+
   let outNumber: number | null = null;
   if (event.outsAdded > 0) {
     outNumber = events
@@ -73,7 +77,11 @@ export function buildCellRecord(events: PlayEvent[], index: number): CellRecord 
       .reduce((total, item) => total + item.outsAdded, 0);
   }
 
-  return { event, reached, outNumber };
+  // 3アウトでその半回が終わったのに塁上に残っていれば残塁
+  const halfIsOver = sameHalf.reduce((total, item) => total + item.outsAdded, 0) >= 3;
+  const leftOnBase = reached >= 1 && reached <= 3 && halfIsOver;
+
+  return { event, reached, outNumber, leftOnBase };
 }
 
 /** 選手ごとの打数・安打・打点・得点。表右側の成績欄に出す */
