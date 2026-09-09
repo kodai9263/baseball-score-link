@@ -12,9 +12,23 @@ export function advanceRunners(
   let nextBases: RunnerState = { first: null, second: null, third: null };
   let outsAdded = 0;
 
-  if (result === "strikeout" || result === "groundout" || result === "flyout" || result === "sacrifice") {
+  if (result === "strikeout" || result === "groundout" || result === "flyout") {
     outsAdded = 1;
     nextBases = bases;
+  }
+
+  if (result === "sacrifice") {
+    outsAdded = 1;
+
+    if (state.outs + outsAdded >= 3) {
+      // 打者走者が一塁に触れる前に第3アウトが成立するので得点は認められない
+      // （公認野球規則5.08(a)）。走者も進めずに回を終える。
+      nextBases = bases;
+    } else {
+      // 犠打は打者と引き換えに走者を1つずつ進める。走者が進まなければ犠打として成立しない。
+      if (bases.third) runsScored.push(bases.third);
+      nextBases = { first: null, second: bases.first, third: bases.second };
+    }
   }
 
   if (result === "single" || result === "walk" || result === "hit_by_pitch" || result === "error") {

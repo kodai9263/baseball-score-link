@@ -13,6 +13,63 @@ const empty = bases(null, null, null);
 
 const state = (overrides: Partial<GameState> = {}): GameState => ({ ...initialGameState, ...overrides });
 
+describe("advanceRunners / 犠打", () => {
+  it("走者がいなければ打者がアウトになるだけ", () => {
+    const result = advanceRunners(state({ bases: empty }), "batter", "sacrifice");
+
+    expect(result.outsAdded).toBe(1);
+    expect(result.basesAfter).toEqual(empty);
+    expect(result.runsScored).toEqual([]);
+    expect(result.rbi).toBe(0);
+  });
+
+  it("一塁走者を二塁へ送る", () => {
+    const result = advanceRunners(state({ bases: bases("r1", null, null) }), "batter", "sacrifice");
+
+    expect(result.outsAdded).toBe(1);
+    expect(result.basesAfter).toEqual(bases(null, "r1", null));
+    expect(result.runsScored).toEqual([]);
+  });
+
+  it("一二塁の走者をそれぞれ1つ送る", () => {
+    const result = advanceRunners(state({ bases: bases("r1", "r2", null) }), "batter", "sacrifice");
+
+    expect(result.basesAfter).toEqual(bases(null, "r1", "r2"));
+    expect(result.runsScored).toEqual([]);
+  });
+
+  it("三塁走者が生還し打点がつく（スクイズ）", () => {
+    const result = advanceRunners(state({ bases: bases(null, null, "r3") }), "batter", "sacrifice");
+
+    expect(result.runsScored).toEqual(["r3"]);
+    expect(result.rbi).toBe(1);
+    expect(result.basesAfter).toEqual(empty);
+  });
+
+  it("満塁では三塁走者が生還し、残りが1つずつ進む", () => {
+    const result = advanceRunners(state({ bases: bases("r1", "r2", "r3") }), "batter", "sacrifice");
+
+    expect(result.runsScored).toEqual(["r3"]);
+    expect(result.rbi).toBe(1);
+    expect(result.basesAfter).toEqual(bases(null, "r1", "r2"));
+  });
+
+  it("2アウトからの犠打は3アウト目になるため得点を認めない", () => {
+    const result = advanceRunners(state({ outs: 2, bases: bases(null, null, "r3") }), "batter", "sacrifice");
+
+    expect(result.outsAdded).toBe(1);
+    expect(result.runsScored).toEqual([]);
+    expect(result.rbi).toBe(0);
+    expect(result.basesAfter).toEqual(bases(null, null, "r3"));
+  });
+
+  it("2アウトからの犠打では走者も進めない", () => {
+    const result = advanceRunners(state({ outs: 2, bases: bases("r1", null, null) }), "batter", "sacrifice");
+
+    expect(result.basesAfter).toEqual(bases("r1", null, null));
+  });
+});
+
 describe("advanceRunners / 打者アウト", () => {
   it.each(["strikeout", "groundout", "flyout"] as const)("%s は走者を動かさない", (result) => {
     const transition = advanceRunners(state({ bases: bases("r1", null, "r3") }), "batter", result);
