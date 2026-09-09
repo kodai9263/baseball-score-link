@@ -53,3 +53,26 @@ export const getPlayer = (playerId: string): Player => {
 
   return player;
 };
+
+/** 表示専用のサンプルチーム。試合ヘッダーの対戦カードに使う */
+export const teams = {
+  away: { name: "青葉ファイターズ", short: "青葉" },
+  home: { name: "東台イーグルス", short: "東台" }
+} as const;
+
+/** MVPで表示するイニング数 */
+export const inningLabels = ["1", "2", "3", "4", "5", "6"];
+
+/**
+ * 打席結果を意味で3群に分ける。
+ * タブでは切り替えず同一画面に並べるので、頻出操作のタップ数は1回のまま変わらない。
+ */
+export const resultGroups: Array<{
+  id: string;
+  label: string;
+  results: PlateAppearanceResult[];
+}> = [
+  { id: "hit", label: "安打", results: ["single", "double", "triple", "home_run"] },
+  { id: "reach", label: "出塁", results: ["walk", "hit_by_pitch", "error"] },
+  { id: "out", label: "アウト", results: ["strikeout", "groundout", "flyout", "sacrifice"] }
+];

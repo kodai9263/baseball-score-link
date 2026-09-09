@@ -8,7 +8,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   width: "device-width",
-  initialScale: 1
+  initialScale: 1,
+  // 画面下の固定操作バーで safe-area-inset を使うために必要
+  viewportFit: "cover",
+  themeColor: "#ffffff"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
