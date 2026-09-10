@@ -1,4 +1,5 @@
-import { getPlayer, resultLabels } from "@/lib/score-data";
+import { getPlayer } from "@/lib/score-data";
+import { describePlayEvent } from "@/lib/play-details";
 import type { PlayEvent } from "@/lib/types";
 
 type RecentPlaysProps = {
@@ -46,10 +47,10 @@ export function RecentPlays({ events }: RecentPlaysProps) {
                   ) : null}
                 </p>
                 <p className={`mt-0.5 truncate font-bold ${isLatest ? "text-base text-ink" : "text-sm text-ink"}`}>
-                  {batter.name}
+                  {event.kind === "runner" ? event.movements?.filter(move => move.to !== move.from).map(move => getPlayer(move.playerId).name).join("・") || "走者" : batter.name}
                 </p>
                 <p className="mt-0.5 text-sm text-muted">
-                  {resultLabels[event.result].label}
+                  {describePlayEvent(event)}
                   <span aria-hidden="true"> ・ </span>
                   <span className="tabular-nums">打点 {event.rbi}</span>
                   <span aria-hidden="true"> ・ </span>

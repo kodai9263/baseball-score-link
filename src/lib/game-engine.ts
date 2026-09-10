@@ -12,7 +12,7 @@ export function advanceRunners(
   let nextBases: RunnerState = { first: null, second: null, third: null };
   let outsAdded = 0;
 
-  if (result === "strikeout" || result === "groundout" || result === "flyout") {
+  if (result === "strikeout" || result === "groundout" || result === "flyout" || result === "foul_fly" || result === "lineout" || result === "double_play") {
     outsAdded = 1;
     nextBases = bases;
   }
@@ -31,9 +31,20 @@ export function advanceRunners(
     }
   }
 
-  if (result === "single" || result === "walk" || result === "hit_by_pitch" || result === "error") {
+  if (["single", "infield_hit", "bunt_hit", "hit_error", "dropped_third", "fielders_choice", "error"].includes(result)) {
     if (bases.third) runsScored.push(bases.third);
     nextBases = { first: batterId, second: bases.first, third: bases.second };
+  }
+
+  if (["walk", "hit_by_pitch", "intentional_walk"].includes(result)) {
+    nextBases = { ...bases, first: batterId };
+    if (bases.first) {
+      nextBases.second = bases.first;
+      if (bases.second) {
+        nextBases.third = bases.second;
+        if (bases.third) runsScored.push(bases.third);
+      }
+    }
   }
 
   if (result === "double") {
@@ -109,7 +120,7 @@ export function applyPlayEvent(state: GameState, event: PlayEvent): GameState {
     ...transition,
     battingOrderIndex: {
       ...state.battingOrderIndex,
-      [event.half]: state.battingOrderIndex[event.half] + 1
+      [event.half]: state.battingOrderIndex[event.half] + (event.kind === "runner" ? 0 : 1)
     },
     awayScore: state.awayScore + (event.half === "top" ? event.runsScored.length : 0),
     homeScore: state.homeScore + (event.half === "bottom" ? event.runsScored.length : 0),

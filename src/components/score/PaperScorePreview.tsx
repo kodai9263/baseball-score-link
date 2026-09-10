@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import styles from "./PaperScorePreview.module.css";
 import { MoveHorizontal } from "lucide-react";
 import { buildCellRecord, buildPlayerSummary, findPlateAppearances } from "@/lib/paper-score";
 import type { CellRecord } from "@/lib/paper-score";
-import { getPlayer, lineups, resultLabels, teams } from "@/lib/score-data";
+import { getPlayer, lineups, teams } from "@/lib/score-data";
+import { paperSymbol } from "@/lib/paper-symbol";
+import { describePlayEvent } from "@/lib/play-details";
 import type { Half, PlayEvent } from "@/lib/types";
 
 type PaperScorePreviewProps = {
@@ -23,32 +26,37 @@ const baseWords = ["アウト", "一塁", "二塁", "三塁", "生還"] as const
  * - ひし形の頂点が各塁。下=本塁、右=一塁、上=二塁、左=三塁
  * - 走者が到達した塁まで塁間に斜線を引く
  * - 打席結果の記号は一塁の区画（右下）に書く
- * - 中央には、アウトなら I / II / III、生還なら ●、残塁なら ℓ を置く
- * - アウトになったプレーの記号にはアンダーラインを引く
+ * - 中央には、アウトなら I / II / III、生還なら赤い○、残塁なら ℓ を置く
+ * - フライは守備番号の上に弧を添える
  * - 3アウトチェンジのときはマスの右下角に斜線2本を入れる
  */
 function DiamondMark({ record, label }: { record: CellRecord | null; label: string | null }) {
   const reached = record?.reached ?? 0;
   const traveled = (leg: number) => reached >= leg;
-  const isOut = Boolean(record?.outNumber);
+  const symbol = record ? paperSymbol(record.event) : null;
 
   return (
     <svg
       viewBox="0 0 72 72"
-      className="h-auto w-full max-w-[96px]"
+      className={styles.diamond}
       role={label ? "img" : "presentation"}
       aria-label={label ?? undefined}
       aria-hidden={label ? undefined : true}
     >
       {/* 空欄でも塁の罫は残し、白紙のスコアブックに見えるようにする */}
-      <polygon points="36,62 62,36 36,10 10,36" fill="none" stroke="var(--color-line)" strokeWidth="1.2" />
+      <polygon points="36,53 53,36 36,19 19,36" fill="none" stroke="#9bafa6" strokeWidth="0.7" strokeDasharray="1.4 1.4" />
 
-      {/* 到達した塁まで塁間に斜線を引く。本塁→一塁→二塁→三塁→本塁の順 */}
-      <g stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round">
-        {traveled(1) ? <line x1="36" y1="62" x2="62" y2="36" /> : null}
-        {traveled(2) ? <line x1="62" y1="36" x2="36" y2="10" /> : null}
-        {traveled(3) ? <line x1="36" y1="10" x2="10" y2="36" /> : null}
-        {traveled(4) ? <line x1="10" y1="36" x2="36" y2="62" /> : null}
+      {/* 安打そのもので獲得した塁は赤、後続打者による進塁は墨色で分ける。 */}
+      <g strokeWidth="1.6" strokeLinecap="round" fill="none">
+        {[
+          [36, 53, 53, 36],
+          [53, 36, 36, 19],
+          [36, 19, 19, 36],
+          [19, 36, 36, 53]
+        ].map(([x1, y1, x2, y2], index) => traveled(index + 1) ? (
+          <line key={index} x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke={symbol && index < symbol.hitBases ? "#b84058" : "#263f52"} />
+        ) : null)}
       </g>
 
       {/* 中央。アウト数・得点・残塁は同時に起こらないので同じ場所を使う */}
@@ -57,40 +65,59 @@ function DiamondMark({ record, label }: { record: CellRecord | null; label: stri
           x="36"
           y="42"
           textAnchor="middle"
-          className="fill-ink text-[19px] font-bold"
+          className="fill-ink text-[15px]"
           style={{ fontFamily: "var(--font-mono)", letterSpacing: "-0.5px" }}
         >
           {"I".repeat(record.outNumber)}
         </text>
       ) : null}
-      {reached === 4 ? <circle cx="36" cy="36" r="8" fill="var(--color-primary)" /> : null}
+      {reached === 4 ? <circle cx="36" cy="36" r="5" fill="none" stroke="#b84058" strokeWidth="1.4" /> : null}
       {record?.leftOnBase ? (
-        <text x="36" y="44" textAnchor="middle" className="fill-ink text-[22px] italic">
+        <text x="36" y="44" textAnchor="middle" className="fill-ink text-[18px] italic">
           ℓ
         </text>
       ) : null}
 
-      {/* 打席結果の記号は一塁の区画（右下）。アウトのプレーにはアンダーラインを引く */}
+      {/* 右下に守備番号・処理順。安打種別は赤い塁間線の本数で表す。 */}
       {record ? (
         <>
           <text
             x="51"
             y="59"
             textAnchor="middle"
-            className="text-[13px] font-bold"
+            className="text-[12px]"
+            textLength={symbol && symbol.text.length > 4 ? 34 : undefined}
+            lengthAdjust="spacingAndGlyphs"
             style={{
               fontFamily: "var(--font-mono)",
               fill: "var(--color-ink)",
               stroke: "var(--color-surface)",
-              strokeWidth: 3.5,
+              strokeWidth: 2,
               paintOrder: "stroke"
             }}
           >
-            {record.event.notation}
+            {symbol?.reverseK ? <tspan style={{ unicodeBidi: "bidi-override", direction: "rtl" }}>ꓘ</tspan> : symbol?.text}
           </text>
-          {isOut ? <line x1="38" y1="63" x2="64" y2="63" stroke="var(--color-ink)" strokeWidth="1.4" /> : null}
+          {symbol?.liner ? <line x1="43" y1="46" x2="59" y2="46" stroke="#263f52" strokeWidth="1.2" /> : null}
+          {record.event.result === "infield_hit" ? <path d="M44 61 Q53 67 61 51" fill="none" stroke="#b84058" strokeWidth="1.2" /> : null}
+          {record.event.result === "bunt_hit" ? <circle cx="51" cy="55" r="9" fill="none" stroke="#b84058" strokeWidth="1.1" /> : null}
+          {symbol?.fly ? <path d="M43 48 Q51 41 59 48" fill="none" stroke="#263f52" strokeWidth="1.2" /> : null}
         </>
       ) : null}
+
+      {/* 走塁の記号は、進んだ塁の区画に追記する。長い処理順は欄外にも残す。 */}
+      {[2, 3, 4].map(base => {
+        const notes = record?.notes?.filter(note => note.base === base) ?? [];
+        const x = base === 2 ? 55 : 16;
+        const y = base === 4 ? 52 : 12;
+        return notes.slice(0, 2).map((note, index) => (
+          <text key={`${base}-${index}`} x={x} y={y + index * 10} textAnchor="middle"
+            fontSize="11" fill="#263f52" stroke="white" strokeWidth="1.5" paintOrder="stroke"
+            textLength={note.text.length > 5 ? 30 : undefined} lengthAdjust="spacingAndGlyphs">
+            {note.text.length > 8 ? note.text.split(" ")[0] : note.text}
+          </text>
+        ));
+      })}
 
       {/* 3アウトチェンジは右下角に斜線2本 */}
       {record?.outNumber === 3 ? (
@@ -103,7 +130,7 @@ function DiamondMark({ record, label }: { record: CellRecord | null; label: stri
       {/* 打点は左下に点で示す */}
       {record && record.event.rbi > 0
         ? Array.from({ length: Math.min(record.event.rbi, 4) }).map((_, index) => (
-            <circle key={index} cx={6 + index * 7} cy={66} r="2.6" fill="var(--color-ink)" />
+            <circle key={index} cx={6 + index * 7} cy={66} r="1.7" fill="var(--color-ink)" />
           ))
         : null}
     </svg>
@@ -113,8 +140,9 @@ function DiamondMark({ record, label }: { record: CellRecord | null; label: stri
 function describe(cellName: string, record: CellRecord, order: string) {
   return [
     cellName + order,
-    resultLabels[record.event.result].label,
+    describePlayEvent(record.event),
     baseWords[record.reached],
+    record.notes?.map(note => note.text).join("、"),
     record.leftOnBase ? "残塁" : null,
     record.outNumber ? `この回${record.outNumber}アウト目` : null,
     record.event.rbi > 0 ? `打点${record.event.rbi}` : null
@@ -129,42 +157,34 @@ function describe(cellName: string, record: CellRecord, order: string) {
  * 同じマスへ縦に並べる。打席を隠さない。
  */
 function ScoreCell({ records, cellName }: { records: CellRecord[]; cellName: string }) {
-  // 得点したマスだけ薄く色を敷き、何点入った回かを目で追えるようにする（中央の●との二重表現）。
-  // 現在のイニングは見出しの強調だけにして、色が競合しないようにする。
-  const scored = records.some((record) => record.reached === 4);
-
   return (
-    <div
-      className={`flex min-h-[92px] flex-col items-center justify-center gap-2 border-r border-t border-line p-1.5 ${
-        scored ? "bg-primary-soft" : ""
-      }`}
-    >
-      {records.length === 0 ? (
-        <DiamondMark record={null} label={null} />
-      ) : (
-        records.map((record, index) => (
-          <DiamondMark
-            key={record.event.id}
-            record={record}
-            label={describe(cellName, record, records.length > 1 ? ` ${index + 1}打席目` : "")}
-          />
-        ))
-      )}
+    <div className={styles.scoreCell}>
+      {(records.length ? records : [null]).map((record, index) => (
+        <div className={styles.appearance} key={record?.event.id ?? "empty"}>
+          <div className={styles.pitchColumn} aria-hidden="true" />
+          <div className={styles.markColumn}>
+            <DiamondMark
+              record={record}
+              label={record ? describe(cellName, record, records.length > 1 ? ` ${index + 1}打席目` : "") : null}
+            />
+            {record?.notes?.filter((note, index, notes) => note.base === 1 || note.text.length > 8 || notes.filter(previous => previous.base === note.base).indexOf(note) >= 2).map((note, noteIndex) => (
+              <span className={styles.runnerNote} key={noteIndex}>{["", "一塁", "二塁", "三塁", "本塁"][note.base]} {note.text}</span>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function SummaryCell({ value, emphasized = false }: { value: number; emphasized?: boolean }) {
-  return (
-    <div
-      className={`flex min-h-[92px] items-center justify-center border-r border-t border-line tabular-nums ${
-        emphasized ? "bg-sunken text-base font-bold text-ink" : "text-sm text-muted"
-      }`}
-    >
-      {value}
-    </div>
-  );
+function SummaryCell({ value }: { value: number }) {
+  return <div className={styles.summary}>{value || ""}<span className="sr-only">{value === 0 ? "0" : ""}</span></div>;
 }
+
+const positionNumbers: Record<string, string> = {
+  投手: "1", 捕手: "2", 一塁手: "3", 二塁手: "4", 三塁手: "5",
+  遊撃手: "6", 左翼手: "7", 中堅手: "8", 右翼手: "9"
+};
 
 /**
  * 紙スコア風プレビュー。
@@ -188,6 +208,8 @@ export function PaperScorePreview(props: PaperScorePreviewProps) {
 function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: PaperScorePreviewProps & { half: Half }) {
   const teamName = half === "top" ? teams.away.name : teams.home.name;
   const lineup = lineups[half];
+  // 用紙は9回分の罫線を用意し、延長時は全記録が収まるまで増やす。
+  const paperInnings = Array.from({ length: Math.max(9, innings.length) }, (_, index) => String(index + 1));
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScroll, setCanScroll] = useState(false);
 
@@ -205,9 +227,8 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
     return () => observer.disconnect();
   }, [innings.length]);
 
-  // 打順128px + 各回88px以上 + 成績欄4列44px
-  const gridTemplateColumns = `128px repeat(${innings.length}, minmax(88px, 1fr)) repeat(4, 44px)`;
-  const minWidth = 128 + innings.length * 88 + 176;
+  const gridTemplateColumns = `34px 30px 136px 34px repeat(${paperInnings.length}, 68px) repeat(4, 30px)`;
+  const minWidth = 234 + paperInnings.length * 68 + 120;
 
   return (
     <section aria-label={`${teamName}の紙スコア`}>
@@ -217,31 +238,36 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
       {canScroll ? (
         <p className="mb-2 flex items-center gap-1.5 text-xs text-muted">
           <MoveHorizontal size={14} aria-hidden="true" />
-          横にスクロールすると{innings.length}回と成績欄まで見られます
+          横にスクロールすると{paperInnings.length}回と成績欄まで見られます
         </p>
       ) : null}
 
-      <div ref={scrollRef} className="overflow-x-auto rounded-control border border-line bg-surface">
+      <div ref={scrollRef} className={styles.scroll} tabIndex={0} role="region" aria-label={`${teamName}のスコア用紙・横スクロール`}>
+        <div className={styles.sheet} style={{ width: minWidth + 4 }}>
+          <div className={styles.sheetHeader}>
+            <span>チーム名 <strong>{teamName}</strong></span>
+            <span>{half === "top" ? "先攻" : "後攻"}</span>
+            <span>記録：暫定</span>
+          </div>
         <div
-          className="grid text-sm"
-          style={{ gridTemplateColumns, minWidth }}
+          className={styles.grid}
+          style={{ gridTemplateColumns }}
           role="group"
           aria-label={`${teamName}の打順ごとの打席結果プレビュー`}
         >
-          <div className="border-b border-r border-line bg-sunken px-2 py-2.5 text-xs font-bold text-muted">
-            打順
-          </div>
-          {innings.map((inning) => {
+          {["守備", "打順", "選 手 名", "背番"].map((label) => (
+            <div key={label} className={styles.columnHeader}>{label}</div>
+          ))}
+          {paperInnings.map((inning) => {
             const isCurrent = Number(inning) === currentInning && half === currentHalf;
 
             return (
               <div
                 key={inning}
-                className={`border-b border-r border-line px-2 py-2.5 text-center text-xs font-bold tabular-nums ${
-                  isCurrent ? "bg-primary-soft text-primary-dark" : "bg-sunken text-muted"
-                }`}
+                className={styles.columnHeader}
+                aria-current={isCurrent ? "true" : undefined}
               >
-                {inning}回
+                {inning}
                 {isCurrent ? <span className="sr-only">（現在のイニング）</span> : null}
               </div>
             );
@@ -249,7 +275,7 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
           {["打数", "安打", "打点", "得点"].map((label) => (
             <div
               key={label}
-              className="border-b border-r border-line bg-sunken px-1 py-2.5 text-center text-[11px] font-bold text-muted"
+              className={styles.columnHeader}
             >
               {label}
             </div>
@@ -261,16 +287,14 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
 
             return (
               <div key={player.id} className="contents">
-                <div className="flex flex-col justify-center border-r border-t border-line px-2 py-2">
-                  <p className="truncate font-bold text-ink">
-                    <span className="tabular-nums">{slot.order}.</span> {player.name}
-                  </p>
-                  <p className="truncate text-xs text-muted">
-                    <span className="tabular-nums">#{player.number}</span> {slot.position}
-                  </p>
+                <div className={styles.rosterCell} aria-label={slot.position}>
+                  <span>{positionNumbers[slot.position] ?? slot.position}</span>
                 </div>
+                <div className={`${styles.rosterCell} ${styles.order}`}><span>{slot.order}</span></div>
+                <div className={`${styles.rosterCell} ${styles.playerName}`}><span>{player.name}</span></div>
+                <div className={styles.rosterCell}><span>{player.number}</span></div>
 
-                {innings.map((inning) => (
+                {paperInnings.map((inning) => (
                   <ScoreCell
                     key={`${player.id}-${inning}`}
                     cellName={`${inning}回${half === "top" ? "表" : "裏"} ${slot.order}番 ${player.name}`}
@@ -281,20 +305,19 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
                 ))}
 
                 <SummaryCell value={summary.atBats} />
-                <SummaryCell value={summary.hits} emphasized />
+                <SummaryCell value={summary.hits} />
                 <SummaryCell value={summary.rbi} />
-                <SummaryCell value={summary.runs} emphasized />
+                <SummaryCell value={summary.runs} />
               </div>
             );
           })}
         </div>
+        </div>
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-muted">
-        早稲田式の記入法に合わせています。ひし形の頂点は下から反時計回りに本塁・一塁・二塁・三塁で、塁間の太線は走者が到達した塁を表します。
-        打席結果の記号は一塁側（右下）、中央はアウトなら <span className="font-mono font-bold">I</span> /{" "}
-        <span className="font-mono font-bold">II</span> / <span className="font-mono font-bold">III</span>、生還なら ●、残塁なら ℓ です。
-        アウトになったプレーの記号には下線、3アウトチェンジは右下角の斜線2本、左下の点は打点を示します。
+        左の細欄は投球経過、選手欄の下段は交代記入用です。未入力の情報は空欄で表示します。
+        塁間の線は進塁、中央の I・II・III はアウト順、赤い○ は得点、ℓ は残塁、左下の点は打点を表します。安打は赤い塁間線と守備番号、フライは番号の上の弧、四球はB、死球はDBで表します。走塁は各塁の区画にS・CS・BK・WP・PB、失策はE、挟殺はR/Oで追記します。方向不明は「?」です。
       </p>
     </section>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { resultGroups, resultLabels } from "@/lib/score-data";
+import { additionalResultGroups, resultGroups, resultLabels } from "@/lib/score-data";
 import type { PlateAppearanceResult } from "@/lib/types";
 
 type ResultPickerProps = {
@@ -17,6 +17,17 @@ type ResultPickerProps = {
 export function ResultPicker({ value, onChange }: ResultPickerProps) {
   return (
     <div className="space-y-2.5">
+      <label className="block text-sm font-bold">
+        すべてのプレーから選択
+        <select className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface p-2 text-sm" value={value}
+          onChange={(event) => onChange(event.target.value as PlateAppearanceResult)}>
+          {[...resultGroups.map(group => ({ label: group.label, results: group.results })), ...additionalResultGroups].map(group => (
+            <optgroup key={group.label} label={group.label}>
+              {group.results.map(result => <option key={result} value={result}>{resultLabels[result].label}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      </label>
       {resultGroups.map((group) => (
         <fieldset key={group.id} className="rounded-control border border-line bg-sunken px-2.5 pb-2.5 pt-1.5">
           <legend className="px-1 text-xs font-bold text-muted">{group.label}</legend>

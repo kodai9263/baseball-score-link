@@ -6,6 +6,7 @@ type RecordBarProps = {
   batterName: string;
   resultLabel: string;
   canUndo: boolean;
+  canRecord?: boolean;
   onRecord: () => void;
   onUndo: () => void;
   /** 保存処理を足したときに二重送信を止めるための口。現状は常に false */
@@ -20,6 +21,7 @@ export function RecordBar({
   batterName,
   resultLabel,
   canUndo,
+  canRecord = true,
   onRecord,
   onUndo,
   pending = false
@@ -38,7 +40,7 @@ export function RecordBar({
         <button
           type="button"
           onClick={onRecord}
-          disabled={pending}
+          disabled={pending || !canRecord}
           aria-busy={pending}
           className="inline-flex min-h-[52px] flex-1 select-none items-center justify-center gap-2 rounded-control bg-action px-4 text-[17px] font-bold text-white transition-colors duration-150 hover:bg-action-hover active:bg-action-hover disabled:cursor-not-allowed disabled:opacity-60"
         >

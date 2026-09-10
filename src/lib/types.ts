@@ -15,7 +15,24 @@ export type PlateAppearanceResult =
   | "groundout"
   | "flyout"
   | "error"
-  | "sacrifice";
+  | "sacrifice"
+  | "infield_hit" | "bunt_hit" | "intentional_walk" | "dropped_third"
+  | "foul_fly" | "lineout" | "fielders_choice" | "double_play"
+  | "stolen_base" | "caught_stealing" | "balk" | "wild_pitch" | "passed_ball"
+  | "runner_error" | "hit_error" | "tag_out" | "rundown";
+
+export type Destination = Base | "home" | "out";
+export type RunnerMovement = {
+  playerId: string;
+  from: Base | "batter";
+  to: Destination;
+  outOrder?: number;
+  outAt?: Base | "home";
+  scoredBeforeThirdOut?: boolean;
+  reason?: string;
+  via?: Base;
+};
+export type ThirdOutKind = "force" | "batter_before_first" | "tag" | "caught_fly";
 
 export type Player = {
   id: string;
@@ -39,7 +56,18 @@ export type RunnerState = {
   third: string | null;
 };
 
-export type PlayEvent = {
+export type FieldPosition = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+export type PlayDetails = {
+  direction?: FieldPosition;
+  errorFielder?: FieldPosition;
+  fieldingSequence?: FieldPosition[];
+};
+
+export type PlayEvent = PlayDetails & {
+  kind?: "plate" | "runner";
+  movements?: RunnerMovement[];
+  thirdOutKind?: ThirdOutKind;
   id: string;
   inning: number;
   half: Half;

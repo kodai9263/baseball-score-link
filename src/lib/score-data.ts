@@ -45,10 +45,27 @@ export const resultLabels: Record<PlateAppearanceResult, { label: string; notati
   walk: { label: "四球", notation: "BB" },
   hit_by_pitch: { label: "死球", notation: "HBP" },
   strikeout: { label: "三振", notation: "K" },
-  groundout: { label: "ゴロアウト", notation: "5-3" },
-  flyout: { label: "フライアウト", notation: "F8" },
-  error: { label: "失策出塁", notation: "E5" },
-  sacrifice: { label: "犠打", notation: "SAC" }
+  groundout: { label: "ゴロアウト", notation: "GO" },
+  flyout: { label: "フライアウト", notation: "FO" },
+  error: { label: "失策出塁", notation: "E" },
+  sacrifice: { label: "犠打", notation: "SAC" },
+  infield_hit: { label: "内野安打", notation: "IH" },
+  bunt_hit: { label: "バント安打", notation: "BH" },
+  intentional_walk: { label: "申告敬遠", notation: "DIB" },
+  dropped_third: { label: "振り逃げ", notation: "K" },
+  foul_fly: { label: "ファウルフライ", notation: "FF" },
+  lineout: { label: "ライナー", notation: "L" },
+  fielders_choice: { label: "野手選択", notation: "FC" },
+  double_play: { label: "併殺", notation: "DP" },
+  stolen_base: { label: "盗塁", notation: "S" },
+  caught_stealing: { label: "盗塁死", notation: "CS" },
+  balk: { label: "ボーク", notation: "BK" },
+  wild_pitch: { label: "ワイルドピッチ", notation: "WP" },
+  passed_ball: { label: "パスボール", notation: "PB" },
+  runner_error: { label: "失策による進塁", notation: "E" },
+  hit_error: { label: "ワンヒットワンエラー", notation: "H+E" },
+  tag_out: { label: "タッチアウト", notation: "TO" },
+  rundown: { label: "挟殺プレイ", notation: "R/O" }
 };
 
 export const initialGameState: GameState = {
@@ -102,4 +119,10 @@ export const resultGroups: Array<{
   { id: "hit", label: "安打", results: ["single", "double", "triple", "home_run"] },
   { id: "reach", label: "出塁", results: ["walk", "hit_by_pitch", "error"] },
   { id: "out", label: "アウト", results: ["strikeout", "groundout", "flyout", "sacrifice"] }
+];
+
+
+export const additionalResultGroups: { label: string; results: PlateAppearanceResult[] }[] = [
+  { label: "追加の打席結果", results: ["infield_hit", "bunt_hit", "intentional_walk", "dropped_third", "foul_fly", "lineout", "fielders_choice", "double_play", "hit_error"] },
+  { label: "走塁・投手（打席を進めない）", results: ["stolen_base", "caught_stealing", "balk", "wild_pitch", "passed_ball", "runner_error", "tag_out", "rundown"] }
 ];
