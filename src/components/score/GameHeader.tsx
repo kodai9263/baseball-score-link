@@ -1,17 +1,16 @@
-import { CircleDot, Cloud, CloudOff } from "lucide-react";
+import { CircleDot, HardDrive } from "lucide-react";
 import { useMatch } from "./MatchContext";
 import type { GameStatus } from "@/lib/types";
 
 type GameHeaderProps = {
   status: GameStatus;
-  hasSupabaseConfig: boolean;
 };
 
 /**
  * 薄型の試合ヘッダー。
  * モバイルのファーストビューを入力に使いたいので、高さを詰めて対戦カードと記録状態だけを載せる。
  */
-export function GameHeader({ status, hasSupabaseConfig }: GameHeaderProps) {
+export function GameHeader({ status }: GameHeaderProps) {
   const { teams } = useMatch();
   const isConfirmed = status === "confirmed";
 
@@ -32,12 +31,8 @@ export function GameHeader({ status, hasSupabaseConfig }: GameHeaderProps) {
             <span>スコア入力</span>
             <span aria-hidden="true">/</span>
             <span className="inline-flex items-center gap-1">
-              {hasSupabaseConfig ? (
-                <Cloud size={12} aria-hidden="true" />
-              ) : (
-                <CloudOff size={12} aria-hidden="true" />
-              )}
-              {hasSupabaseConfig ? "Supabase接続あり" : "ローカル試作"}
+              <HardDrive size={12} aria-hidden="true" />
+              このブラウザに保存
             </span>
           </p>
         </div>

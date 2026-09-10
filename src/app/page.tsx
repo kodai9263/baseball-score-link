@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ClipboardList, FileText, ListChecks, Share2 } from "lucide-react";
+import { ClipboardList, FileText, ListChecks, Table2 } from "lucide-react";
 import { BatterCard } from "@/components/score/BatterCard";
 import { GameHeader } from "@/components/score/GameHeader";
 import { LineScore, buildLineScoreRows } from "@/components/score/LineScore";
@@ -17,7 +17,7 @@ import { buildPlayNotation, describePlay, normalizePlayDetails } from "@/lib/pla
 import { Scoreboard } from "@/components/score/Scoreboard";
 import { applyPlayEvent, buildScoreByInning, undoLastPlay } from "@/lib/game-engine";
 import { buildInningLabels, getCurrentLineupSlot, initialGameState } from "@/lib/score-data";
-import { hasSupabaseConfig } from "@/lib/supabase";
+import { BackupPanel } from "@/components/members/BackupPanel";
 import { MatchContext } from "@/components/score/MatchContext";
 import { MemberPanel } from "@/components/members/MemberPanel";
 import { MatchManager } from "@/components/members/MatchManager";
@@ -77,11 +77,14 @@ export default function Home() {
   return (
     <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, openMember }}>
     <div className="min-h-dvh">
-      <GameHeader status={game.status} hasSupabaseConfig={hasSupabaseConfig} />
+      <GameHeader status={game.status} />
 
       <nav aria-label="メインメニュー" className="mx-auto flex max-w-[1280px] gap-2 px-4 pt-3 sm:px-6 lg:px-8">
         {([ ["score", "スコア入力"], ["members", "メンバー・成績"] ] as const).map(([id, label]) => <button key={id} type="button" disabled={!ready} aria-current={view === id ? "page" : undefined} onClick={() => setView(id)} className={`min-h-11 rounded-control px-4 text-sm font-bold ${view === id ? "bg-primary text-white" : "border border-line bg-surface text-ink"}`}>{label}</button>)}
       </nav>
+      <div className="mx-auto max-w-[1280px] px-4 pt-3 sm:px-6 lg:px-8">
+        <BackupPanel book={book} disabled={!ready || pending} restore={async next => { if (await commitBook(next)) { clearDraft(); setSelectedMember(null); setView("score"); return true; } return false; }} />
+      </div>
       {view === "members" ? <main className="mx-auto max-w-[1000px] p-4 pb-12 sm:p-6">
         {!ready ? <p role="status">{storageError || "保存したメンバーを確認しています…"}</p> : null}
         {ready && storageError ? <p role="alert" className="mb-3 text-action">{storageError}</p> : null}
@@ -162,9 +165,9 @@ export default function Home() {
         {/* 試合中の入力を邪魔しない下位セクション */}
         <div className="mt-4 space-y-4 lg:mt-0">
           <Panel
-            title="ライブ共有"
-            icon={<Share2 size={18} aria-hidden="true" />}
-            description="チーム関係者に見せるイニング別得点です。"
+            title="イニング別スコア"
+            icon={<Table2 size={18} aria-hidden="true" />}
+            description="このブラウザに保存している試合の得点です。"
           >
             <LineScore
               currentInning={game.inning}

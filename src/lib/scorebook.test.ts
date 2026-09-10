@@ -120,6 +120,29 @@ describe("通算・学年別・期間の成績", () => {
 
 
 describe("試合帳の保存失敗と競合", () => {
+  it("バックアップの復元後も複数試合・成績・旧保存を維持する", () => {
+    const first = play(match("backup-one", "2025-09-10"), "single");
+    const second = play(match("backup-two"), "home_run");
+    const imported = decodeBook(encodeBook({ ...book, matches: [first, second], activeId: second.id }));
+    const original = encodeBook(book);
+    const legacy = encodeGame(initialGameState);
+    const data = new Map([[BOOK_KEY, original], [GAME_STORAGE_KEY, legacy]]);
+    const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
+    saveBook(storage, original, legacy, imported);
+    const reloaded = decodeBook(storage.getItem(BOOK_KEY)!);
+    expect(reloaded).toEqual(imported);
+    expect(memberStats(reloaded.matches, "p1")).toMatchObject({ games: 2, hits: 2, homeRuns: 1, average: "1.000" });
+    expect(storage.getItem(GAME_STORAGE_KEY)).toBe(legacy);
+  });
+  it("プレビュー中に別の保存が入ったら復元で上書きしない", () => {
+    const original = encodeBook(book);
+    const updated = { ...book, matches: [play(book.matches[0], "single")] };
+    const latest = encodeBook(updated);
+    const data = new Map([[BOOK_KEY, latest]]);
+    const storage = { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => { data.set(key, value); } };
+    expect(() => saveBook(storage, original, null, decodeBook(original))).toThrow("別の画面");
+    expect(storage.getItem(BOOK_KEY)).toBe(latest);
+  });
   it("旧データを残したまま新形式を保存する", () => {
     const legacy = encodeGame(initialGameState);
     const data = new Map([[GAME_STORAGE_KEY, legacy]]);
