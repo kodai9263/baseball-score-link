@@ -1,4 +1,4 @@
-import type { PlateAppearanceResult, PlayEvent } from "./types";
+import type { LineupChange, PlateAppearanceResult, PlayEvent } from "./types";
 
 // 紙スコアの表示に必要な情報を、記録済みイベントから復元する層。
 // 試合進行の計算には手を出さず、読み取りだけを行う。
@@ -38,9 +38,9 @@ export function findPlateAppearances(events: PlayEvent[], playerId: string, inni
  * 打席時点の到達塁は basesAfter から読み、その後の進塁と生還は
  * 同じ半回の後続イベントを追って求める。
  */
-export function buildCellRecord(events: PlayEvent[], index: number): CellRecord {
+export function buildCellRecord(events: PlayEvent[], index: number, changes: LineupChange[] = []): CellRecord {
   const event = events[index];
-  const playerId = event.batterId;
+  let playerId = event.batterId;
 
   let reached: Reached = 0;
   if (event.runsScored.includes(playerId)) {
@@ -59,9 +59,17 @@ export function buildCellRecord(events: PlayEvent[], index: number): CellRecord 
   let totalOuts = events.slice(0, index).filter(item => item.inning === event.inning && item.half === event.half)
     .reduce((sum, item) => sum + item.outsAdded, 0);
   let finished = false;
-  for (let i = index; i < events.length; i += 1) {
+  for (let i = index; i <= events.length; i += 1) {
     const later = events[i];
-    if (later.inning !== event.inning || later.half !== event.half) break;
+    if (later && (later.inning !== event.inning || later.half !== event.half)) break;
+    if (i > index && !finished && reached > 0 && reached < 4) {
+      for (const change of changes.filter(change => change.beforePlay === i && change.kind === "runner")) {
+        if (change.outgoingId !== playerId) continue;
+        playerId = change.incomingId;
+        notes.push({ text: "代走", base: reached });
+      }
+    }
+    if (!later) break;
     if (i > index && later.kind !== "runner" && later.batterId === playerId) break;
     const move = later.movements?.find(item => item.playerId === playerId);
     if (move && !finished) {

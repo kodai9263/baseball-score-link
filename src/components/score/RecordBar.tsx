@@ -52,7 +52,7 @@ export function RecordBar({
           type="button"
           onClick={onUndo}
           disabled={!canUndo}
-          aria-label="直前のプレーを取り消す"
+          aria-label="直前の記録・交代を取り消す"
           className="inline-flex min-h-[52px] shrink-0 select-none items-center justify-center gap-1.5 rounded-control border border-line bg-surface px-3.5 text-sm font-bold text-muted transition-colors duration-150 hover:border-muted hover:text-ink active:bg-sunken disabled:cursor-not-allowed disabled:border-line disabled:bg-sunken disabled:text-muted disabled:opacity-55"
         >
           <RotateCcw size={17} aria-hidden="true" />

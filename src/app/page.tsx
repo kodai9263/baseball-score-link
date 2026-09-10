@@ -15,8 +15,11 @@ import { isRunnerResult, resolveMovements, suggestedMovements } from "@/lib/play
 import { PlayDetailPicker } from "@/components/score/PlayDetailPicker";
 import { buildPlayNotation, describePlay, normalizePlayDetails } from "@/lib/play-details";
 import { Scoreboard } from "@/components/score/Scoreboard";
-import { applyPlayEvent, buildScoreByInning, undoLastPlay } from "@/lib/game-engine";
-import { buildInningLabels, getCurrentLineupSlot, initialGameState } from "@/lib/score-data";
+import { applyPlayEvent, buildScoreByInning } from "@/lib/game-engine";
+import { buildInningLabels, getCurrentLineupSlot } from "@/lib/score-data";
+import { currentLineups } from "@/lib/lineup-changes";
+import { undoMatch, type Match } from "@/lib/scorebook";
+import { LineupManager } from "@/components/members/LineupManager";
 import { BackupPanel } from "@/components/members/BackupPanel";
 import { MatchContext } from "@/components/score/MatchContext";
 import { MemberPanel } from "@/components/members/MemberPanel";
@@ -39,8 +42,8 @@ export default function Home() {
   const [editedMovements, setEditedMovements] = useState<RunnerMovement[] | null>(null);
   const [thirdOutKind, setThirdOutKind] = useState<ThirdOutKind | "">("");
   const [rbiOverride, setRbiOverride] = useState("");
-  const currentLineup = getCurrentLineupSlot(game, match.lineups);
-  const currentBatter = getPlayer(currentLineup.playerId);
+  const currentLineup = getCurrentLineupSlot(game, currentLineups(match));
+  const currentBatter = { ...getPlayer(currentLineup.playerId), position: currentLineup.position };
 
   const movements = editedMovements ?? suggestedMovements(game, currentBatter.id, selectedResult);
   const resolution = resolveMovements(game, currentBatter.id, selectedResult, movements, thirdOutKind, playDetails, rbiOverride === "" ? undefined : Number(rbiOverride));
@@ -70,12 +73,17 @@ export default function Home() {
   };
 
   const undoPlay = async () => {
-    if (!ready || pending || !game.events.length) return;
-    if (await commit(undoLastPlay(game, initialGameState))) clearDraft();
+    if (!ready || pending) return;
+    await saveMatch(undoMatch(match));
+  };
+  const saveMatch = async (next: Match) => {
+    const success = await commitBook({ ...book, matches: book.matches.map(item => item.id === next.id ? next : item) });
+    if (success) clearDraft();
+    return success;
   };
 
   return (
-    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, openMember }}>
+    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, changes: match.changes ?? [], openMember }}>
     <div className="min-h-dvh">
       <GameHeader status={game.status} />
 
@@ -110,6 +118,8 @@ export default function Home() {
             awayScore={game.awayScore}
             bases={game.bases}
           />
+
+          <LineupManager key={`${match.id}-${game.events.length}-${match.changes?.length ?? 0}`} book={book} match={match} save={saveMatch} disabled={!ready || pending} />
 
           <Panel title="打席入力" icon={<ListChecks size={18} aria-hidden="true" />}>
             <p className="mb-2 text-sm font-bold text-primary-dark">
@@ -153,7 +163,7 @@ export default function Home() {
                   canRecord={ready && !resolution.error}
                   pending={pending}
                   resultLabel={describePlay(selectedResult, playDetails)}
-                  canUndo={ready && !pending && game.events.length > 0}
+                  canUndo={ready && !pending && (game.events.length > 0 || !!match.changes?.length)}
                   onRecord={recordPlay}
                   onUndo={undoPlay}
                 />

@@ -50,6 +50,17 @@ export type LineupSlot = {
   position: string;
 };
 
+export type LineupChange = {
+  id: string;
+  beforePlay: number;
+  team: Half;
+  order: number;
+  outgoingId: string;
+  incomingId: string;
+  kind: "hitter" | "runner" | "defense" | "position";
+  position: string;
+};
+
 export type RunnerState = {
   first: string | null;
   second: string | null;

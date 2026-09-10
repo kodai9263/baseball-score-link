@@ -1,20 +1,28 @@
 "use client";
 import { useState } from "react";
+import { defaultSources } from "@/lib/lineup-changes";
 import { average, localDate, memberStats, schoolYear, type Member, type Scorebook } from "@/lib/scorebook";
 
 const field = "mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-ink";
 const action = "min-h-11 rounded-control bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50";
 type Props = { book: Scorebook; selectedId: string | null; select: (id: string | null) => void; save: (book: Scorebook) => Promise<boolean>; disabled: boolean; openMatch: (id: string) => void };
 
+function memberTeamNames(book: Scorebook) {
+  const match = book.matches.find(match => match.id === book.activeId)!;
+  const sources = match.teamSources ?? defaultSources;
+  return sources.top === "top" ? { top: match.teams.away.name, bottom: match.teams.home.name } : { top: match.teams.home.name, bottom: match.teams.away.name };
+}
+
 export function MemberPanel({ book, selectedId, select, save, disabled, openMatch }: Props) {
   const [query, setQuery] = useState("");
   const [team, setTeam] = useState("top");
+  const names = memberTeamNames(book);
   const member = book.members.find(item => item.id === selectedId);
   if (member) return <MemberDetail key={member.id} member={member} book={book} back={() => select(null)} save={save} disabled={disabled} openMatch={openMatch} />;
   return <section className="space-y-4" aria-label="メンバー一覧">
     <div><h1 className="text-xl font-bold">メンバー・成績</h1><p className="mt-1 text-sm text-muted">名前を押すと、通算・学年別・試合ごとの成績を見られます。</p></div>
     <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">メンバーを検索<input className={field} value={query} onInput={event => setQuery(event.currentTarget.value)} onChange={event => setQuery(event.target.value)} placeholder="名前・背番号" /></label>
-      <label className="text-sm">所属<select className={field} value={team} onChange={event => setTeam(event.target.value)}><option value="top">先攻側の登録メンバー</option><option value="bottom">後攻側の登録メンバー</option><option value="">すべて</option></select></label></div>
+      <label className="text-sm">所属<select className={field} value={team} onChange={event => setTeam(event.target.value)}><option value="top">{names.top}の登録メンバー</option><option value="bottom">{names.bottom}の登録メンバー</option><option value="">すべて</option></select></label></div>
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{book.members.filter(item => (!team || item.team === team) && `${item.name} ${item.number}`.includes(query.trim())).map(item => {
       const stats = memberStats(book.matches, item.id);
       return <button key={item.id} type="button" className="flex min-h-20 items-center justify-between gap-3 rounded-card border border-line bg-surface p-4 text-left hover:border-primary" onClick={() => select(item.id)} aria-label={`${item.name}の成績を見る`}>
@@ -23,13 +31,14 @@ export function MemberPanel({ book, selectedId, select, save, disabled, openMatc
       </button>;
     })}</div>
     {!book.members.some(item => (!team || item.team === team) && `${item.name} ${item.number}`.includes(query.trim())) ? <p className="py-6 text-center text-muted">一致するメンバーがいません。</p> : null}
-    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバーを登録する</summary><MemberForm key={`new-${book.members.length}`} save={async member => save({ ...book, members: [...book.members, member] })} disabled={disabled} /></details>
+    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバーを登録する</summary><MemberForm book={book} key={`new-${book.members.length}`} save={async member => save({ ...book, members: [...book.members, member] })} disabled={disabled} /></details>
   </section>;
 }
 
-function MemberForm({ member, save, disabled }: { member?: Member; save: (member: Member) => Promise<boolean>; disabled: boolean }) {
+function MemberForm({ book, member, save, disabled }: { book: Scorebook; member?: Member; save: (member: Member) => Promise<boolean>; disabled: boolean }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const names = memberTeamNames(book);
   return <form className="mt-3" onSubmit={async event => {
     event.preventDefault(); setError(""); setDone(false);
     const data = new FormData(event.currentTarget);
@@ -43,7 +52,7 @@ function MemberForm({ member, save, disabled }: { member?: Member; save: (member
     <label className="text-sm">背番号<input name="number" type="number" required min={0} max={999} defaultValue={member?.number ?? 0} className={field} /></label>
     <label className="text-sm">学年<select name="grade" defaultValue={member?.grade ?? "4年"} className={field}>{[1, 2, 3, 4, 5, 6].map(grade => <option key={grade}>{grade}年</option>)}<option>学年不明</option></select></label>
     <label className="text-sm">学年の基準年度<input name="year" type="number" min={1900} max={2200} required defaultValue={member?.gradeYear ?? schoolYear(localDate())} className={field} /></label>
-    <label className="text-sm">登録する側<select name="team" defaultValue={member?.team ?? "top"} className={field}><option value="top">先攻側</option><option value="bottom">後攻側</option></select></label>
+    <label className="text-sm">登録する側<select name="team" defaultValue={member?.team ?? "top"} className={field}><option value="top">{names.top}</option><option value="bottom">{names.bottom}</option></select></label>
     <label className="text-sm">守備位置<select name="position" defaultValue={member?.position ?? "投手"} className={field}>{["投手", "捕手", "一塁手", "二塁手", "三塁手", "遊撃手", "左翼手", "中堅手", "右翼手"].map(position => <option key={position}>{position}</option>)}</select></label>
     <label className="text-sm">打席<select name="bats" defaultValue={member?.bats ?? "右"} className={field}>{["右", "左", "両"].map(bats => <option key={bats}>{bats}</option>)}</select></label>
     <p className="text-xs text-muted sm:col-span-2">年度は4月始まりです。変更は今後作る試合に適用し、記録済みの試合の名前・学年はそのまま残します。</p>
@@ -84,6 +93,6 @@ function MemberDetail({ member, book, back, save, disabled, openMatch }: { membe
       <h2 className="font-bold">試合別の内訳</h2>
       {!stats.rows.length ? <p className="rounded-card border border-dashed border-line p-6 text-center text-muted">この条件に一致する出場記録はありません。</p> : <div className="space-y-2">{stats.rows.map(row => <button key={row.match.id} type="button" disabled={disabled} onClick={() => openMatch(row.match.id)} className="flex min-h-20 w-full flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surface p-4 text-left hover:border-primary"><span><span className="block text-xs text-muted">{row.match.date ?? "日付未設定"} · {row.match.players.find(player => player.id === member.id)?.grade}</span><strong>{row.match.teams.away.name} vs {row.match.teams.home.name}</strong><span className="mt-1 block text-sm">{row.atBats}打数 {row.hits}安打 · 打率 {average(row.hits, row.atBats)} · {row.rbi}打点</span></span><span className="text-sm font-bold text-primary">スコアを見る →</span></button>)}</div>}
     </>}
-    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバー情報を編集</summary><MemberForm member={member} disabled={disabled} save={async next => save({ ...book, members: book.members.map(item => item.id === member.id ? next : item) })} /></details>
+    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバー情報を編集</summary><MemberForm book={book} member={member} disabled={disabled} save={async next => save({ ...book, members: book.members.map(item => item.id === member.id ? next : item) })} /></details>
   </section>;
 }

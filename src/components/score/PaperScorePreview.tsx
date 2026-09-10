@@ -8,6 +8,7 @@ import type { CellRecord } from "@/lib/paper-score";
 import { useMatch } from "./MatchContext";
 import { paperSymbol } from "@/lib/paper-symbol";
 import { describePlayEvent } from "@/lib/play-details";
+import { currentLineups, changeLabels } from "@/lib/lineup-changes";
 import type { Half, PlayEvent } from "@/lib/types";
 
 type PaperScorePreviewProps = {
@@ -198,7 +199,6 @@ export function PaperScorePreview(props: PaperScorePreviewProps) {
           key={half}
           {...props}
           half={half}
-          events={props.events.filter((event) => event.half === half)}
         />
       ))}
     </div>
@@ -206,9 +206,11 @@ export function PaperScorePreview(props: PaperScorePreviewProps) {
 }
 
 function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: PaperScorePreviewProps & { half: Half }) {
-  const { getPlayer, lineups, teams, openMember } = useMatch();
+  const { getPlayer, lineups, teams, changes, openMember } = useMatch();
   const teamName = half === "top" ? teams.away.name : teams.home.name;
-  const lineup = lineups[half];
+  const active = currentLineups({ lineups, changes })[half];
+  const lineup = lineups[half].flatMap(slot => [slot, ...changes.filter(change => change.team === half && change.order === slot.order && change.kind !== "position")
+    .map(change => ({ order: change.order, playerId: change.incomingId, position: change.position }))]);
   // 用紙は9回分の罫線を用意し、延長時は全記録が収まるまで増やす。
   const paperInnings = Array.from({ length: Math.max(9, innings.length) }, (_, index) => String(index + 1));
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -285,14 +287,18 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
           {lineup.map((slot) => {
             const player = getPlayer(slot.playerId);
             const summary = buildPlayerSummary(events, player.id);
+            const entry = changes.find(change => change.incomingId === player.id && change.kind !== "position");
+            const exitIndex = changes.findIndex(change => change.outgoingId === player.id && change.kind !== "position");
+            const beforeExit = exitIndex < 0 ? undefined : currentLineups({ lineups, changes: changes.slice(0, exitIndex) })[half].find(item => item.playerId === player.id);
+            const position = active.find(item => item.playerId === player.id)?.position ?? beforeExit?.position ?? slot.position;
 
             return (
               <div key={player.id} className="contents">
-                <div className={styles.rosterCell} aria-label={slot.position}>
-                  <span>{positionNumbers[slot.position] ?? slot.position}</span>
+                <div className={styles.rosterCell} aria-label={position}>
+                  <span>{positionNumbers[position] ?? position}</span>
                 </div>
                 <div className={`${styles.rosterCell} ${styles.order}`}><span>{slot.order}</span></div>
-                <div className={`${styles.rosterCell} ${styles.playerName}`}><span><button type="button" className="hover:underline" aria-label={`${player.name}の成績を見る`} onClick={() => openMember(player.id)}>{player.name}</button></span></div>
+                <div className={`${styles.rosterCell} ${styles.playerName}`}><span><button type="button" className="hover:underline" aria-label={`${player.name}の成績を見る`} onClick={() => openMember(player.id)}>{player.name}</button>{entry ? <small className="block text-[10px]">{changeLabels[entry.kind]}・{entry.beforePlay}プレー後</small> : null}</span></div>
                 <div className={styles.rosterCell}><span>{player.number}</span></div>
 
                 {paperInnings.map((inning) => (
@@ -300,7 +306,7 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
                     key={`${player.id}-${inning}`}
                     cellName={`${inning}回${half === "top" ? "表" : "裏"} ${slot.order}番 ${player.name}`}
                     records={findPlateAppearances(events, player.id, Number(inning)).map((index) =>
-                      buildCellRecord(events, index)
+                      buildCellRecord(events, index, changes)
                     )}
                   />
                 ))}
@@ -317,7 +323,7 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-muted">
-        左の細欄は投球経過、選手欄の下段は交代記入用です。未入力の情報は空欄で表示します。
+        左の細欄は投球経過です。交代選手は同じ打順の下に別行で表示し、打席と成績を分けます。代走後の塁間線は元の出塁マスに「代走」と追記し、得点は代走選手に集計します。守備欄は現在または退いた時の位置です。
         塁間の線は進塁、中央の I・II・III はアウト順、赤い○ は得点、ℓ は残塁、左下の点は打点を表します。安打は赤い塁間線と守備番号、フライは番号の上の弧、四球はB、死球はDBで表します。走塁は各塁の区画にS・CS・BK・WP・PB、失策はE、挟殺はR/Oで追記します。方向不明は「?」です。
       </p>
     </section>
