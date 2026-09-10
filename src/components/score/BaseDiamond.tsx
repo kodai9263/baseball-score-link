@@ -1,4 +1,4 @@
-import { getPlayer } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import type { RunnerState } from "@/lib/types";
 
 type BaseDiamondProps = {
@@ -28,6 +28,7 @@ function BaseMark({ occupied }: { occupied: boolean }) {
  * 名前が長くても図が崩れないよう、図と文字を分けている。
  */
 export function BaseDiamond({ bases }: BaseDiamondProps) {
+  const { getPlayer } = useMatch();
   return (
     <div className="flex items-center gap-3">
       {/* 図は装飾なので読み上げ対象にしない。内容は右のリストが持つ */}

@@ -16,19 +16,30 @@ import { PlayDetailPicker } from "@/components/score/PlayDetailPicker";
 import { buildPlayNotation, describePlay, normalizePlayDetails } from "@/lib/play-details";
 import { Scoreboard } from "@/components/score/Scoreboard";
 import { applyPlayEvent, buildScoreByInning, undoLastPlay } from "@/lib/game-engine";
-import { buildInningLabels, getCurrentLineupSlot, getPlayer, initialGameState, teams } from "@/lib/score-data";
+import { buildInningLabels, getCurrentLineupSlot, initialGameState } from "@/lib/score-data";
 import { hasSupabaseConfig } from "@/lib/supabase";
+import { MatchContext } from "@/components/score/MatchContext";
+import { MemberPanel } from "@/components/members/MemberPanel";
+import { MatchManager } from "@/components/members/MatchManager";
 import { useSavedGame } from "@/hooks/useSavedGame";
 import type { PlateAppearanceResult, PlayDetails, PlayEvent, RunnerMovement, ThirdOutKind } from "@/lib/types";
 
 export default function Home() {
-  const { game, commit, ready, pending, error: storageError, saved } = useSavedGame();
+  const { book, match, game, commit, commitBook, ready, pending, error: storageError, saved } = useSavedGame();
+  const [view, setView] = useState<"score" | "members">("score");
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  const teams = match.teams;
+  const getPlayer = (id: string) => match.players.find(player => player.id === id)!;
+  const openMember = (id: string) => { setSelectedMember(id); setView("members"); window.scrollTo({ top: 0 }); };
+  const openMatch = async (id: string) => {
+    if (await commitBook({ ...book, activeId: id })) { clearDraft(); setView("score"); window.scrollTo({ top: 0 }); }
+  };
   const [selectedResult, setSelectedResult] = useState<PlateAppearanceResult>("single");
   const [playDetails, setPlayDetails] = useState<PlayDetails>({});
   const [editedMovements, setEditedMovements] = useState<RunnerMovement[] | null>(null);
   const [thirdOutKind, setThirdOutKind] = useState<ThirdOutKind | "">("");
   const [rbiOverride, setRbiOverride] = useState("");
-  const currentLineup = getCurrentLineupSlot(game);
+  const currentLineup = getCurrentLineupSlot(game, match.lineups);
   const currentBatter = getPlayer(currentLineup.playerId);
 
   const movements = editedMovements ?? suggestedMovements(game, currentBatter.id, selectedResult);
@@ -64,9 +75,18 @@ export default function Home() {
   };
 
   return (
+    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, openMember }}>
     <div className="min-h-dvh">
       <GameHeader status={game.status} hasSupabaseConfig={hasSupabaseConfig} />
 
+      <nav aria-label="メインメニュー" className="mx-auto flex max-w-[1280px] gap-2 px-4 pt-3 sm:px-6 lg:px-8">
+        {([ ["score", "スコア入力"], ["members", "メンバー・成績"] ] as const).map(([id, label]) => <button key={id} type="button" disabled={!ready} aria-current={view === id ? "page" : undefined} onClick={() => setView(id)} className={`min-h-11 rounded-control px-4 text-sm font-bold ${view === id ? "bg-primary text-white" : "border border-line bg-surface text-ink"}`}>{label}</button>)}
+      </nav>
+      {view === "members" ? <main className="mx-auto max-w-[1000px] p-4 pb-12 sm:p-6">
+        {!ready ? <p role="status">{storageError || "保存したメンバーを確認しています…"}</p> : null}
+        {ready && storageError ? <p role="alert" className="mb-3 text-action">{storageError}</p> : null}
+        {ready ? <MemberPanel book={book} selectedId={selectedMember} select={setSelectedMember} save={commitBook} disabled={!ready || pending} openMatch={openMatch} /> : null}
+      </main> : <>
       {/* 記録・取消のたびに現在の試合状況を読み上げる */}
       <p aria-live="polite" className="sr-only">
         {game.inning}回{game.half === "top" ? "表" : "裏"}、{game.outs}アウト、{teams.away.name} {game.awayScore} 対{" "}
@@ -74,6 +94,9 @@ export default function Home() {
       </p>
 
       <main className="mx-auto max-w-[1280px] px-4 pb-[168px] pt-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-6 lg:px-8 lg:pb-10">
+        <div className="lg:col-span-2"><MatchManager key={match.id} book={book} match={match} disabled={!ready || pending} select={openMatch} save={async next => { const success = await commitBook(next); if (success) clearDraft(); return success; }} />
+          {storageError ? <p role="alert" className="mb-3 text-action">{storageError}</p> : null}
+        </div>
         {/* 試合中いちばん見る領域。モバイルではここが最初の画面に収まるようにする */}
         <div className="space-y-4">
           <Scoreboard
@@ -146,7 +169,7 @@ export default function Home() {
             <LineScore
               currentInning={game.inning}
               innings={innings}
-              rows={buildLineScoreRows(scoreByInning, game.awayScore, game.homeScore)}
+              rows={buildLineScoreRows(scoreByInning, game.awayScore, game.homeScore, teams)}
             />
           </Panel>
 
@@ -167,6 +190,8 @@ export default function Home() {
           </Panel>
         </div>
       </main>
+      </>}
     </div>
+    </MatchContext.Provider>
   );
 }

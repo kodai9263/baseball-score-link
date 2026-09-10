@@ -97,10 +97,11 @@ export function LineScore({ currentInning, innings, rows }: LineScoreProps) {
 export function buildLineScoreRows(
   scoreByInning: Array<{ topRuns: number; bottomRuns: number }>,
   awayScore: number,
-  homeScore: number
+  homeScore: number,
+  matchTeams: { away: { name: string }; home: { name: string } } = teams
 ) {
   return [
-    { team: teams.away.name, values: scoreByInning.map((item) => item.topRuns), total: awayScore },
-    { team: teams.home.name, values: scoreByInning.map((item) => item.bottomRuns), total: homeScore }
+    { team: matchTeams.away.name, values: scoreByInning.map((item) => item.topRuns), total: awayScore },
+    { team: matchTeams.home.name, values: scoreByInning.map((item) => item.bottomRuns), total: homeScore }
   ];
 }

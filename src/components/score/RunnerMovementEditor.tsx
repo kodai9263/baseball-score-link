@@ -1,4 +1,4 @@
-import { getPlayer } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import type { Base, Destination, RunnerMovement, ThirdOutKind } from "@/lib/types";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
 const baseLabels = { batter: "打者", first: "一塁走者", second: "二塁走者", third: "三塁走者" };
 
 export function RunnerMovementEditor({ movements, onChange, thirdOutKind, onThirdOutChange, outs, hitError }: Props) {
+  const { getPlayer } = useMatch();
   const update = (index: number, value: Partial<RunnerMovement>) => onChange(movements.map((move, i) => i === index ? { ...move, ...value } : move));
   const thirdOut = outs + movements.filter(move => move.to === "out").length >= 3;
   return (

@@ -32,8 +32,8 @@ export const lineups: Record<Half, LineupSlot[]> = {
   bottom: buildLineup(homePlayers)
 };
 
-export const getCurrentLineupSlot = (game: GameState): LineupSlot => {
-  const lineup = lineups[game.half];
+export const getCurrentLineupSlot = (game: GameState, gameLineups = lineups): LineupSlot => {
+  const lineup = gameLineups[game.half];
   return lineup[game.battingOrderIndex[game.half] % lineup.length];
 };
 

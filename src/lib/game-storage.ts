@@ -1,7 +1,7 @@
 import { applyPlayEvent } from "./game-engine";
-import { getCurrentLineupSlot, initialGameState, players, resultLabels } from "./score-data";
+import { getCurrentLineupSlot, initialGameState, players, lineups, resultLabels } from "./score-data";
 import { isRunnerResult, resolveMovements } from "./play-resolution";
-import type { GameState, PlayEvent } from "./types";
+import type { GameState, PlayEvent, Player } from "./types";
 
 // 集計値を重複保存せず、記録済みイベントから同じ手順で復元する。
 export const GAME_STORAGE_KEY = "baseball-score-link:sample-game:v1";
@@ -10,12 +10,13 @@ type StoragePort = Pick<Storage, "getItem" | "setItem">;
 const roster = players.map(player => player.id);
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const isInteger = (value: unknown, min: number, max: number) => Number.isInteger(value) && Number(value) >= min && Number(value) <= max;
-const isPlayer = (value: unknown) => typeof value === "string" && roster.includes(value);
+
 const isPosition = (value: unknown) => isInteger(value, 1, 9);
 const bases = ["first", "second", "third"];
 const thirdOutKinds = ["force", "batter_before_first", "tag", "caught_fly"];
 
-function isEvent(value: unknown): value is PlayEvent {
+function isEvent(value: unknown, roster: string[]): value is PlayEvent {
+  const isPlayer = (value: unknown) => typeof value === "string" && roster.includes(value);
   if (!isObject(value) || typeof value.id !== "string" || !value.id || !isInteger(value.inning, 1, 999) ||
       !["top", "bottom"].includes(String(value.half)) || !isPlayer(value.batterId) ||
       typeof value.result !== "string" || !Object.hasOwn(resultLabels, value.result) ||
@@ -46,7 +47,8 @@ export function encodeGame(game: GameState): string {
   return JSON.stringify({ version: 1, roster, events: game.events });
 }
 
-export function decodeGame(raw: string | null): GameState {
+export function decodeGame(raw: string | null, matchPlayers: Player[] = players, matchLineups = lineups): GameState {
+  const roster = matchPlayers.map(player => player.id);
   if (raw === null) return initialGameState;
   const invalid = () => new Error("保存済みの記録を読み込めません。元のデータは上書きしていません。");
   let data: unknown;
@@ -55,8 +57,8 @@ export function decodeGame(raw: string | null): GameState {
   let game = initialGameState;
   const ids = new Set<string>();
   for (const event of data.events) {
-    if (!isEvent(event) || ids.has(event.id) || event.inning !== game.inning || event.half !== game.half ||
-        event.batterId !== getCurrentLineupSlot(game).playerId || game.outs + event.outsAdded > 3 ||
+    if (!isEvent(event, roster) || ids.has(event.id) || event.inning !== game.inning || event.half !== game.half ||
+        event.batterId !== getCurrentLineupSlot(game, matchLineups).playerId || game.outs + event.outsAdded > 3 ||
         event.rbi > event.runsScored.length || (event.kind === "runner") !== isRunnerResult(event.result)) throw invalid();
     const participants = [event.batterId, ...Object.values(game.bases)].filter(Boolean);
     const survivors = [...Object.values(event.basesAfter).filter(Boolean), ...event.runsScored];

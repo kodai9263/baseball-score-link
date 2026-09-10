@@ -1,5 +1,5 @@
 import { CircleDot, Cloud, CloudOff } from "lucide-react";
-import { teams } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import type { GameStatus } from "@/lib/types";
 
 type GameHeaderProps = {
@@ -12,6 +12,7 @@ type GameHeaderProps = {
  * モバイルのファーストビューを入力に使いたいので、高さを詰めて対戦カードと記録状態だけを載せる。
  */
 export function GameHeader({ status, hasSupabaseConfig }: GameHeaderProps) {
+  const { teams } = useMatch();
   const isConfirmed = status === "confirmed";
 
   return (

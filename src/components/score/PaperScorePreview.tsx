@@ -5,7 +5,7 @@ import styles from "./PaperScorePreview.module.css";
 import { MoveHorizontal } from "lucide-react";
 import { buildCellRecord, buildPlayerSummary, findPlateAppearances } from "@/lib/paper-score";
 import type { CellRecord } from "@/lib/paper-score";
-import { getPlayer, lineups, teams } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import { paperSymbol } from "@/lib/paper-symbol";
 import { describePlayEvent } from "@/lib/play-details";
 import type { Half, PlayEvent } from "@/lib/types";
@@ -206,6 +206,7 @@ export function PaperScorePreview(props: PaperScorePreviewProps) {
 }
 
 function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: PaperScorePreviewProps & { half: Half }) {
+  const { getPlayer, lineups, teams, openMember } = useMatch();
   const teamName = half === "top" ? teams.away.name : teams.home.name;
   const lineup = lineups[half];
   // 用紙は9回分の罫線を用意し、延長時は全記録が収まるまで増やす。
@@ -291,7 +292,7 @@ function TeamPaperScore({ events, innings, currentInning, currentHalf, half }: P
                   <span>{positionNumbers[slot.position] ?? slot.position}</span>
                 </div>
                 <div className={`${styles.rosterCell} ${styles.order}`}><span>{slot.order}</span></div>
-                <div className={`${styles.rosterCell} ${styles.playerName}`}><span>{player.name}</span></div>
+                <div className={`${styles.rosterCell} ${styles.playerName}`}><span><button type="button" className="hover:underline" aria-label={`${player.name}の成績を見る`} onClick={() => openMember(player.id)}>{player.name}</button></span></div>
                 <div className={styles.rosterCell}><span>{player.number}</span></div>
 
                 {paperInnings.map((inning) => (

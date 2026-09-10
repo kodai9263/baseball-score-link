@@ -1,4 +1,4 @@
-import { getPlayer } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import { describePlayEvent } from "@/lib/play-details";
 import type { PlayEvent } from "@/lib/types";
 
@@ -11,6 +11,7 @@ type RecentPlaysProps = {
  * 最新の1件を最も目立たせ、回表裏・選手名・結果・打点・追加アウトの順に読ませる。
  */
 export function RecentPlays({ events }: RecentPlaysProps) {
+  const { getPlayer } = useMatch();
   if (events.length === 0) {
     return (
       <p className="rounded-control border border-dashed border-line bg-sunken px-3 py-4 text-sm text-muted">

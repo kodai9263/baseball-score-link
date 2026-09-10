@@ -1,4 +1,4 @@
-import { teams } from "@/lib/score-data";
+import { useMatch } from "./MatchContext";
 import type { GameState } from "@/lib/types";
 import { BaseDiamond } from "./BaseDiamond";
 
@@ -36,6 +36,7 @@ function TeamScore({
  * 「何回の表裏か・何対何か・何アウトか・走者は誰か」を1つの視野に収める。
  */
 export function Scoreboard({ inning, half, outs, homeScore, awayScore, bases }: ScoreboardProps) {
+  const { teams } = useMatch();
   const attackingTeam = half === "top" ? teams.away : teams.home;
 
   return (
