@@ -1,8 +1,8 @@
 import { applyPlayEvent } from "./game-engine";
 import { getCurrentLineupSlot, initialGameState, players, lineups, resultLabels } from "./score-data";
 import { isRunnerResult, resolveMovements } from "./play-resolution";
-import type { GameState, PlayEvent, Player, LineupChange } from "./types";
-import { applyLineupChange, replaceRunner, validateChange } from "./lineup-changes";
+import type { DHSetup, GameState, PlayEvent, Player, LineupChange } from "./types";
+import { advanceLineup, initialLineupState, replaceRunner, validateChange, validateDHSetup } from "./lineup-changes";
 
 // 集計値を重複保存せず、記録済みイベントから同じ手順で復元する。
 export const GAME_STORAGE_KEY = "baseball-score-link:sample-game:v1";
@@ -48,7 +48,7 @@ export function encodeGame(game: GameState): string {
   return JSON.stringify({ version: 1, roster, events: game.events });
 }
 
-export function decodeGame(raw: string | null, matchPlayers: Player[] = players, matchLineups = lineups, changes: LineupChange[] = []): GameState {
+export function decodeGame(raw: string | null, matchPlayers: Player[] = players, matchLineups = lineups, changes: LineupChange[] = [], dh: DHSetup = {}): GameState {
   const roster = matchPlayers.map(player => player.id);
   if (raw === null) return initialGameState;
   const invalid = () => new Error("保存済みの記録を読み込めません。元のデータは上書きしていません。");
@@ -57,24 +57,25 @@ export function decodeGame(raw: string | null, matchPlayers: Player[] = players,
   if (!isObject(data) || data.version !== 1 || JSON.stringify(data.roster) !== JSON.stringify(roster) || !Array.isArray(data.events)) throw invalid();
   let game = initialGameState;
   const ids = new Set<string>();
-  let activeLineups = matchLineups;
-  const used = new Set(Object.values(matchLineups).flat().map(slot => slot.playerId));
+  validateDHSetup(dh, matchLineups, roster);
+  let active = initialLineupState({ lineups: matchLineups, dh });
+  const used = new Set([...Object.values(matchLineups).flat().map(slot => slot.playerId), ...Object.values(active.pitchers)]);
   let cursor = 0;
   const applyChanges = () => {
     while (cursor < changes.length && changes[cursor]?.beforePlay === game.events.length) {
       const change = changes[cursor++];
-      validateChange(change, game, activeLineups, used, roster);
+      validateChange(change, game, active.lineups, used, roster, active.pitchers);
       if (ids.has(change.id)) throw invalid();
       ids.add(change.id);
       used.add(change.incomingId);
-      activeLineups = applyLineupChange(activeLineups, change);
+      active = advanceLineup(active, change);
       game = replaceRunner(game, change);
     }
   };
   for (const event of data.events) {
     applyChanges();
     if (!isEvent(event, roster) || ids.has(event.id) || event.inning !== game.inning || event.half !== game.half ||
-        event.batterId !== getCurrentLineupSlot(game, activeLineups).playerId || game.outs + event.outsAdded > 3 ||
+        event.batterId !== getCurrentLineupSlot(game, active.lineups).playerId || game.outs + event.outsAdded > 3 ||
         event.rbi > event.runsScored.length || (event.kind === "runner") !== isRunnerResult(event.result)) throw invalid();
     const participants = [event.batterId, ...Object.values(game.bases)].filter(Boolean);
     const survivors = [...Object.values(event.basesAfter).filter(Boolean), ...event.runsScored];

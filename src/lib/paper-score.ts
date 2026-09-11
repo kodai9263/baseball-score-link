@@ -63,7 +63,7 @@ export function buildCellRecord(events: PlayEvent[], index: number, changes: Lin
     const later = events[i];
     if (later && (later.inning !== event.inning || later.half !== event.half)) break;
     if (i > index && !finished && reached > 0 && reached < 4) {
-      for (const change of changes.filter(change => change.beforePlay === i && change.kind === "runner")) {
+      for (const change of changes.filter(change => change.beforePlay === i && (change.kind === "runner" || (change.kind === "dh_end" && change.dhEnd === "pitcher_bats")))) {
         if (change.outgoingId !== playerId) continue;
         playerId = change.incomingId;
         notes.push({ text: "代走", base: reached });

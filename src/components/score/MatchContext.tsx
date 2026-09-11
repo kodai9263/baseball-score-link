@@ -9,6 +9,7 @@ export const MatchContext = createContext<{
   lineups: Match["lineups"];
   teams: Match["teams"];
   changes: LineupChange[];
+  dh?: Match["dh"];
   openMember: (id: string) => void;
 }>({ getPlayer, lineups, teams, changes: [], openMember: () => {} });
 export const useMatch = () => useContext(MatchContext);

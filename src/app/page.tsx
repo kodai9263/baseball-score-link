@@ -83,7 +83,7 @@ export default function Home() {
   };
 
   return (
-    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, changes: match.changes ?? [], openMember }}>
+    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, changes: match.changes ?? [], dh: match.dh, openMember }}>
     <div className="min-h-dvh">
       <GameHeader status={game.status} />
 

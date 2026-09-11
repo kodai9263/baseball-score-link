@@ -50,6 +50,9 @@ export type LineupSlot = {
   position: string;
 };
 
+export type DHSetup = Partial<Record<Half, { order: number; pitcherId: string }>>;
+export type DHEnd = "pitcher_bats" | "dh_fields" | "pitcher_fields";
+
 export type LineupChange = {
   id: string;
   beforePlay: number;
@@ -57,8 +60,9 @@ export type LineupChange = {
   order: number;
   outgoingId: string;
   incomingId: string;
-  kind: "hitter" | "runner" | "defense" | "position";
+  kind: "hitter" | "runner" | "defense" | "position" | "pitcher" | "dh_end";
   position: string;
+  dhEnd?: DHEnd;
 };
 
 export type RunnerState = {
