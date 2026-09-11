@@ -14,6 +14,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cloud-db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: score_cloud_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: チーム境界・権限・招待・保存競合を検証
+        env:
+          DATABASE_TEST_URL: postgresql://postgres:test-only@localhost:5432/score_cloud_test
+        run: bash scripts/test-cloud-db.sh
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15

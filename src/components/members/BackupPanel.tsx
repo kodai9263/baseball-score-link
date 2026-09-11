@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { decodeBook, encodeBook, localDate, type Scorebook } from "@/lib/scorebook";
 
-export function BackupPanel({ book, disabled, restore }: { book: Scorebook; disabled: boolean; restore: (book: Scorebook) => Promise<boolean> }) {
+export function BackupPanel({ book, disabled, restore, readOnly = false }: { book: Scorebook; disabled: boolean; readOnly?: boolean; restore: (book: Scorebook) => Promise<boolean> }) {
   const [preview, setPreview] = useState<Scorebook | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -25,7 +25,7 @@ export function BackupPanel({ book, disabled, restore }: { book: Scorebook; disa
     <p className="my-3 text-sm text-muted">すべてのメンバー・試合をファイルに保存できます。別の端末や公開先へ移すときにも使えます。ファイルにはメンバー名が含まれます。</p>
     <button type="button" disabled={disabled} onClick={download} className="min-h-11 rounded-control border border-primary px-4 text-sm font-bold text-primary disabled:opacity-50">バックアップを書き出す</button>
     <label className="mt-4 block text-sm font-bold">バックアップから復元する
-      <input ref={fileRef} type="file" accept=".json,application/json" disabled={disabled} className="mt-2 block w-full min-w-0 text-sm" onChange={async event => {
+      <input ref={fileRef} type="file" accept=".json,application/json" disabled={disabled || readOnly} className="mt-2 block w-full min-w-0 text-sm" onChange={async event => {
         const file = event.target.files?.[0];
         const version = ++readVersion.current;
         setPreview(null); setError(""); setMessage("");
@@ -40,8 +40,8 @@ export function BackupPanel({ book, disabled, restore }: { book: Scorebook; disa
     {preview ? <div className="mt-3 space-y-3 rounded-control bg-sunken p-3 text-sm">
       <p>復元する内容：メンバー{preview.members.length}人・{preview.matches.length}試合・{preview.matches.reduce((sum, match) => sum + match.game.events.length, 0)}プレー</p>
       <p>現在のメンバー{book.members.length}人・{book.matches.length}試合を、この内容に置き換えます。先に現在のバックアップを書き出して保管してください。</p>
-      <div className="flex flex-wrap gap-2"><button type="button" disabled={disabled || backedUp !== current} className="min-h-11 rounded-control bg-primary px-4 font-bold text-white disabled:opacity-50" onClick={async () => {
-        if (backedUp !== current) return;
+      <div className="flex flex-wrap gap-2"><button type="button" disabled={disabled || readOnly || backedUp !== current} className="min-h-11 rounded-control bg-primary px-4 font-bold text-white disabled:opacity-50" onClick={async () => {
+        if (readOnly || backedUp !== current) return;
         if (await restore(preview)) { setPreview(null); setMessage("バックアップから復元しました。"); if (fileRef.current) fileRef.current.value = ""; }
       }}>この内容に復元する</button><button type="button" className="min-h-11 px-3 underline" onClick={() => { ++readVersion.current; setPreview(null); if (fileRef.current) fileRef.current.value = ""; }}>キャンセル</button></div>
     </div> : null}

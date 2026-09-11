@@ -5,7 +5,7 @@ import { average, localDate, memberStats, schoolYear, type Member, type Scoreboo
 
 const field = "mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3 py-2 text-ink";
 const action = "min-h-11 rounded-control bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50";
-type Props = { book: Scorebook; selectedId: string | null; select: (id: string | null) => void; save: (book: Scorebook) => Promise<boolean>; disabled: boolean; openMatch: (id: string) => void };
+type Props = { book: Scorebook; selectedId: string | null; select: (id: string | null) => void; save: (book: Scorebook) => Promise<boolean>; disabled: boolean; readOnly?: boolean; openMatch: (id: string) => void };
 
 function memberTeamNames(book: Scorebook) {
   const match = book.matches.find(match => match.id === book.activeId)!;
@@ -13,12 +13,12 @@ function memberTeamNames(book: Scorebook) {
   return sources.top === "top" ? { top: match.teams.away.name, bottom: match.teams.home.name } : { top: match.teams.home.name, bottom: match.teams.away.name };
 }
 
-export function MemberPanel({ book, selectedId, select, save, disabled, openMatch }: Props) {
+export function MemberPanel({ book, selectedId, select, save, disabled, readOnly=false, openMatch }: Props) {
   const [query, setQuery] = useState("");
   const [team, setTeam] = useState("top");
   const names = memberTeamNames(book);
   const member = book.members.find(item => item.id === selectedId);
-  if (member) return <MemberDetail key={member.id} member={member} book={book} back={() => select(null)} save={save} disabled={disabled} openMatch={openMatch} />;
+  if (member) return <MemberDetail key={member.id} member={member} book={book} back={() => select(null)} save={save} disabled={disabled} readOnly={readOnly} openMatch={openMatch} />;
   return <section className="space-y-4" aria-label="メンバー一覧">
     <div><h1 className="text-xl font-bold">メンバー・成績</h1><p className="mt-1 text-sm text-muted">名前を押すと、通算・学年別・試合ごとの成績を見られます。</p></div>
     <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">メンバーを検索<input className={field} value={query} onInput={event => setQuery(event.currentTarget.value)} onChange={event => setQuery(event.target.value)} placeholder="名前・背番号" /></label>
@@ -31,7 +31,7 @@ export function MemberPanel({ book, selectedId, select, save, disabled, openMatc
       </button>;
     })}</div>
     {!book.members.some(item => (!team || item.team === team) && `${item.name} ${item.number}`.includes(query.trim())) ? <p className="py-6 text-center text-muted">一致するメンバーがいません。</p> : null}
-    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバーを登録する</summary><MemberForm book={book} key={`new-${book.members.length}`} save={async member => save({ ...book, members: [...book.members, member] })} disabled={disabled} /></details>
+    {!readOnly ? <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバーを登録する</summary><MemberForm book={book} key={`new-${book.members.length}`} save={async member => save({ ...book, members: [...book.members, member] })} disabled={disabled} /></details> : null}
   </section>;
 }
 
@@ -60,7 +60,7 @@ function MemberForm({ book, member, save, disabled }: { book: Scorebook; member?
   </fieldset>{error ? <p role="alert" className="mt-2 text-sm text-action">{error}</p> : null}{done ? <p role="status" className="mt-2 text-sm text-primary">保存しました。</p> : null}</form>;
 }
 
-function MemberDetail({ member, book, back, save, disabled, openMatch }: { member: Member; book: Scorebook; back: () => void; save: Props["save"]; disabled: boolean; openMatch: Props["openMatch"] }) {
+function MemberDetail({ member, book, back, save, disabled, readOnly=false, openMatch }: { member: Member; book: Scorebook; back: () => void; save: Props["save"]; disabled: boolean; readOnly?: boolean; openMatch: Props["openMatch"] }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [grade, setGrade] = useState("");
@@ -93,6 +93,6 @@ function MemberDetail({ member, book, back, save, disabled, openMatch }: { membe
       <h2 className="font-bold">試合別の内訳</h2>
       {!stats.rows.length ? <p className="rounded-card border border-dashed border-line p-6 text-center text-muted">この条件に一致する出場記録はありません。</p> : <div className="space-y-2">{stats.rows.map(row => <button key={row.match.id} type="button" disabled={disabled} onClick={() => openMatch(row.match.id)} className="flex min-h-20 w-full flex-wrap items-center justify-between gap-2 rounded-card border border-line bg-surface p-4 text-left hover:border-primary"><span><span className="block text-xs text-muted">{row.match.date ?? "日付未設定"} · {row.match.players.find(player => player.id === member.id)?.grade}</span><strong>{row.match.teams.away.name} vs {row.match.teams.home.name}</strong><span className="mt-1 block text-sm">{row.atBats}打数 {row.hits}安打 · 打率 {average(row.hits, row.atBats)} · {row.rbi}打点</span></span><span className="text-sm font-bold text-primary">スコアを見る →</span></button>)}</div>}
     </>}
-    <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバー情報を編集</summary><MemberForm book={book} member={member} disabled={disabled} save={async next => save({ ...book, members: book.members.map(item => item.id === member.id ? next : item) })} /></details>
+    {!readOnly ? <details className="rounded-card border border-line bg-surface p-4"><summary className="cursor-pointer font-bold">メンバー情報を編集</summary><MemberForm book={book} member={member} disabled={disabled} save={async next => save({ ...book, members: book.members.map(item => item.id === member.id ? next : item) })} /></details> : null}
   </section>;
 }

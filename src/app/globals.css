@@ -62,6 +62,13 @@ button {
   touch-action: manipulation;
 }
 
+/* チーム管理中はスコアの固定ボタンを隠し、フォームの操作を妨げない。 */
+@media (max-width: 1023px) {
+  body:has(details[data-account-panel][open]) [data-score-recordbar] {
+    display: none;
+  }
+}
+
 /* フォーカスリングは消さない。offset の隙間に下地の白が出るので、選択中の緑ボタン上でも視認できる */
 :focus-visible {
   outline: 3px solid var(--color-ink);

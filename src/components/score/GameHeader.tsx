@@ -11,7 +11,7 @@ type GameHeaderProps = {
  * モバイルのファーストビューを入力に使いたいので、高さを詰めて対戦カードと記録状態だけを載せる。
  */
 export function GameHeader({ status }: GameHeaderProps) {
-  const { teams } = useMatch();
+  const { teams, storageLabel } = useMatch();
   const isConfirmed = status === "confirmed";
 
   return (
@@ -32,7 +32,7 @@ export function GameHeader({ status }: GameHeaderProps) {
             <span aria-hidden="true">/</span>
             <span className="inline-flex items-center gap-1">
               <HardDrive size={12} aria-hidden="true" />
-              このブラウザに保存
+              {storageLabel ?? "このブラウザに保存"}
             </span>
           </p>
         </div>
