@@ -1,401 +1,218 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ClipboardList, FileText, RotateCcw, Save, Share2 } from "lucide-react";
-import { getPlayer, initialGameState, lineup, resultLabels } from "@/lib/score-data";
-import { hasSupabaseConfig } from "@/lib/supabase";
-import type { GameState, PlateAppearanceResult, PlayEvent, RunnerState } from "@/lib/types";
+import { ClipboardList, FileText, ListChecks, Table2 } from "lucide-react";
+import { BatterCard } from "@/components/score/BatterCard";
+import { GameHeader } from "@/components/score/GameHeader";
+import { LineScore, buildLineScoreRows } from "@/components/score/LineScore";
+import { Panel } from "@/components/score/Panel";
+import { PaperScorePreview } from "@/components/score/PaperScorePreview";
+import { RecentPlays } from "@/components/score/RecentPlays";
+import { RecordBar } from "@/components/score/RecordBar";
+import { ResultPicker } from "@/components/score/ResultPicker";
+import { RunnerMovementEditor } from "@/components/score/RunnerMovementEditor";
+import { isRunnerResult, resolveMovements, suggestedMovements } from "@/lib/play-resolution";
+import { PlayDetailPicker } from "@/components/score/PlayDetailPicker";
+import { buildPlayNotation, describePlay, normalizePlayDetails } from "@/lib/play-details";
+import { Scoreboard } from "@/components/score/Scoreboard";
+import { applyPlayEvent, buildScoreByInning } from "@/lib/game-engine";
+import { buildInningLabels, getCurrentLineupSlot } from "@/lib/score-data";
+import { currentLineups } from "@/lib/lineup-changes";
+import { undoMatch, type Match } from "@/lib/scorebook";
+import { LineupManager } from "@/components/members/LineupManager";
+import { BackupPanel } from "@/components/members/BackupPanel";
+import { MatchContext } from "@/components/score/MatchContext";
+import { MemberPanel } from "@/components/members/MemberPanel";
+import { MatchManager } from "@/components/members/MatchManager";
+import { AppGate } from "@/components/account/AppGate";
+import { useSavedGame } from "@/hooks/useSavedGame";
+import type { PlateAppearanceResult, PlayDetails, PlayEvent, RunnerMovement, ThirdOutKind } from "@/lib/types";
 
-const resultOptions = Object.entries(resultLabels) as Array<
-  [PlateAppearanceResult, (typeof resultLabels)[PlateAppearanceResult]]
->;
+export default function Home() { return <AppGate><ScoreApp /></AppGate>; }
 
-const inningLabels = ["1", "2", "3", "4", "5", "6"];
-
-function advanceRunners(
-  state: GameState,
-  batterId: string,
-  result: PlateAppearanceResult
-): Pick<PlayEvent, "basesAfter" | "runsScored" | "rbi" | "outsAdded"> {
-  const bases = state.bases;
-  const runsScored: string[] = [];
-  let nextBases: RunnerState = { first: null, second: null, third: null };
-  let outsAdded = 0;
-
-  if (result === "strikeout" || result === "groundout" || result === "flyout" || result === "sacrifice") {
-    outsAdded = 1;
-    nextBases = bases;
-  }
-
-  if (result === "single" || result === "walk" || result === "hit_by_pitch" || result === "error") {
-    if (bases.third) runsScored.push(bases.third);
-    nextBases = { first: batterId, second: bases.first, third: bases.second };
-  }
-
-  if (result === "double") {
-    if (bases.third) runsScored.push(bases.third);
-    if (bases.second) runsScored.push(bases.second);
-    nextBases = { first: null, second: batterId, third: bases.first };
-  }
-
-  if (result === "triple") {
-    if (bases.third) runsScored.push(bases.third);
-    if (bases.second) runsScored.push(bases.second);
-    if (bases.first) runsScored.push(bases.first);
-    nextBases = { first: null, second: null, third: batterId };
-  }
-
-  if (result === "home_run") {
-    if (bases.third) runsScored.push(bases.third);
-    if (bases.second) runsScored.push(bases.second);
-    if (bases.first) runsScored.push(bases.first);
-    runsScored.push(batterId);
-    nextBases = { first: null, second: null, third: null };
-  }
-
-  return {
-    basesAfter: nextBases,
-    runsScored,
-    rbi: runsScored.length,
-    outsAdded
+function ScoreApp() {
+  const { book, match, game, commit, commitBook, selectMatch, ready, pending, error: storageError, saved, blocked, canEdit, cloud } = useSavedGame();
+  const [view, setView] = useState<"score" | "members">("score");
+  const [selectedMember, setSelectedMember] = useState<string | null>(null);
+  const teams = match.teams;
+  const getPlayer = (id: string) => match.players.find(player => player.id === id)!;
+  const openMember = (id: string) => { setSelectedMember(id); setView("members"); window.scrollTo({ top: 0 }); };
+  const openMatch = async (id: string) => {
+    selectMatch(id); clearDraft(); setView("score"); window.scrollTo({ top: 0 });
   };
-}
-
-function nextHalfInning(state: GameState, outsAfterPlay: number): Pick<GameState, "inning" | "half" | "outs" | "bases"> {
-  if (outsAfterPlay < 3) {
-    return { inning: state.inning, half: state.half, outs: outsAfterPlay, bases: state.bases };
-  }
-
-  return {
-    inning: state.half === "top" ? state.inning : state.inning + 1,
-    half: state.half === "top" ? "bottom" : "top",
-    outs: 0,
-    bases: { first: null, second: null, third: null }
-  };
-}
-
-export default function Home() {
-  const [game, setGame] = useState<GameState>(initialGameState);
   const [selectedResult, setSelectedResult] = useState<PlateAppearanceResult>("single");
-  const currentLineup = lineup[game.battingOrderIndex % lineup.length];
-  const currentBatter = getPlayer(currentLineup.playerId);
+  const [playDetails, setPlayDetails] = useState<PlayDetails>({});
+  const [editedMovements, setEditedMovements] = useState<RunnerMovement[] | null>(null);
+  const [thirdOutKind, setThirdOutKind] = useState<ThirdOutKind | "">("");
+  const [rbiOverride, setRbiOverride] = useState("");
+  const currentLineup = getCurrentLineupSlot(game, currentLineups(match));
+  const currentBatter = { ...getPlayer(currentLineup.playerId), position: currentLineup.position };
 
-  const scoreByInning = useMemo(() => {
-    return inningLabels.map((inningLabel) => {
-      const inning = Number(inningLabel);
-      const topRuns = game.events
-        .filter((event) => event.inning === inning && event.half === "top")
-        .reduce((total, event) => total + event.runsScored.length, 0);
-      const bottomRuns = game.events
-        .filter((event) => event.inning === inning && event.half === "bottom")
-        .reduce((total, event) => total + event.runsScored.length, 0);
+  const movements = editedMovements ?? suggestedMovements(game, currentBatter.id, selectedResult);
+  const resolution = resolveMovements(game, currentBatter.id, selectedResult, movements, thirdOutKind, playDetails, rbiOverride === "" ? undefined : Number(rbiOverride));
+  const clearDraft = () => { setPlayDetails({}); setEditedMovements(null); setThirdOutKind(""); setRbiOverride(""); };
 
-      return { inning: inningLabel, topRuns, bottomRuns };
-    });
-  }, [game.events]);
+  // 延長したら表示する回を伸ばす。伸ばさないと7回以降の得点が「計」にだけ乗ってしまう
+  const innings = useMemo(() => buildInningLabels(game.inning), [game.inning]);
+  const scoreByInning = useMemo(() => buildScoreByInning(game.events, innings), [game.events, innings]);
 
-  const recordPlay = () => {
-    const transition = advanceRunners(game, currentBatter.id, selectedResult);
-    const outsAfterPlay = game.outs + transition.outsAdded;
-    const halfTransition = nextHalfInning({ ...game, bases: transition.basesAfter }, outsAfterPlay);
+  const recordPlay = async () => {
+    if (!ready || pending || !canEdit || resolution.error !== null) return;
     const event: PlayEvent = {
       id: crypto.randomUUID(),
       inning: game.inning,
       half: game.half,
       batterId: currentBatter.id,
       result: selectedResult,
-      notation: resultLabels[selectedResult].notation,
-      rbi: transition.rbi,
-      outsAdded: transition.outsAdded,
-      runsScored: transition.runsScored,
-      basesAfter: transition.basesAfter,
+      notation: buildPlayNotation(selectedResult, playDetails),
+      ...normalizePlayDetails(selectedResult, playDetails),
+      ...resolution.transition,
+      kind: isRunnerResult(selectedResult) ? "runner" : "plate",
+      movements: resolution.movements,
+      thirdOutKind: resolution.thirdOutKind,
       scoringStatus: "provisional"
     };
-
-    setGame((current) => ({
-      ...current,
-      inning: halfTransition.inning,
-      half: halfTransition.half,
-      outs: halfTransition.outs,
-      bases: halfTransition.bases,
-      battingOrderIndex: current.battingOrderIndex + 1,
-      awayScore: current.awayScore + (current.half === "top" ? transition.runsScored.length : 0),
-      homeScore: current.homeScore + (current.half === "bottom" ? transition.runsScored.length : 0),
-      events: [...current.events, event],
-      status: "provisional"
-    }));
+    if (await commit(applyPlayEvent(game, event))) clearDraft();
   };
 
-  const undoPlay = () => {
-    if (game.events.length === 0) return;
-
-    setGame((current) => {
-      const events = current.events.slice(0, -1);
-
-      return events.reduce<GameState>((rebuilt, event) => {
-        const transition = nextHalfInning({ ...rebuilt, bases: event.basesAfter }, rebuilt.outs + event.outsAdded);
-
-        return {
-          ...rebuilt,
-          inning: transition.inning,
-          half: transition.half,
-          outs: transition.outs,
-          bases: transition.bases,
-          battingOrderIndex: rebuilt.battingOrderIndex + 1,
-          awayScore: rebuilt.awayScore + (event.half === "top" ? event.runsScored.length : 0),
-          homeScore: rebuilt.homeScore + (event.half === "bottom" ? event.runsScored.length : 0),
-          events: [...rebuilt.events, event]
-        };
-      }, initialGameState);
-    });
+  const undoPlay = async () => {
+    if (!ready || pending || !canEdit) return;
+    await saveMatch(undoMatch(match));
   };
+  const saveMatch = async (next: Match) => {
+    const success = await commitBook({ ...book, matches: book.matches.map(item => item.id === next.id ? next : item) });
+    if (success) clearDraft();
+    return success;
+  };
+
+  if (blocked) return <p role="alert" className="m-6">{storageError}</p>;
+  if (!ready && !storageError) return <p role="status" className="m-6">保存した記録を確認しています…</p>;
 
   return (
-    <main className="min-h-dvh">
-      <header className="border-b border-line bg-white/92">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
-          <div>
-            <p className="text-sm font-semibold text-field-700">少年野球スコア管理</p>
-            <h1 className="mt-1 text-2xl font-bold text-ink sm:text-3xl">スコア連携アプリ MVP</h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge active={hasSupabaseConfig} label={hasSupabaseConfig ? "Supabase接続あり" : "ローカル試作"} />
-            <StatusBadge active={game.status === "confirmed"} label={game.status === "confirmed" ? "確定" : "暫定"} />
-          </div>
+    <MatchContext.Provider value={{ getPlayer, teams, lineups: match.lineups, changes: match.changes ?? [], dh: match.dh, openMember, storageLabel: cloud ? "チームにクラウド保存" : "このブラウザに保存" }}>
+    <div className="min-h-dvh">
+      <GameHeader status={game.status} />
+
+      <nav aria-label="メインメニュー" className="mx-auto flex max-w-[1280px] gap-2 px-4 pt-3 sm:px-6 lg:px-8">
+        {([ ["score", "スコア入力"], ["members", "メンバー・成績"] ] as const).map(([id, label]) => <button key={id} type="button" disabled={!ready} aria-current={view === id ? "page" : undefined} onClick={() => setView(id)} className={`min-h-11 rounded-control px-4 text-sm font-bold ${view === id ? "bg-primary text-white" : "border border-line bg-surface text-ink"}`}>{label}</button>)}
+      </nav>
+      <div className="mx-auto max-w-[1280px] px-4 pt-3 sm:px-6 lg:px-8">
+        {!canEdit ? <p className="mb-2 text-sm">閲覧専用です。試合の切り替え・成績の確認ができます。</p> : null}
+        {storageError ? <button type="button" className="mb-2 min-h-11 underline" onClick={() => window.location.reload()}>最新の記録を読み直す（未保存の入力は破棄）</button> : null}
+        <BackupPanel book={book} readOnly={!canEdit} disabled={!ready || pending} restore={async next => { if (await commitBook(next)) { clearDraft(); setSelectedMember(null); setView("score"); return true; } return false; }} />
+      </div>
+      {view === "members" ? <main className="mx-auto max-w-[1000px] p-4 pb-12 sm:p-6">
+        {!ready ? <p role="status">{storageError || "保存したメンバーを確認しています…"}</p> : null}
+        {ready && storageError ? <p role="alert" className="mb-3 text-action">{storageError}</p> : null}
+        {ready ? <MemberPanel book={book} selectedId={selectedMember} select={setSelectedMember} save={commitBook} readOnly={!canEdit} disabled={!ready || pending} openMatch={openMatch} /> : null}
+      </main> : <>
+      {/* 記録・取消のたびに現在の試合状況を読み上げる */}
+      <p aria-live="polite" className="sr-only">
+        {game.inning}回{game.half === "top" ? "表" : "裏"}、{game.outs}アウト、{teams.away.name} {game.awayScore} 対{" "}
+        {teams.home.name} {game.homeScore}、打席は{currentLineup.order}番 {currentBatter.name}。
+      </p>
+
+      <main className="mx-auto max-w-[1280px] px-4 pb-[168px] pt-4 sm:px-6 lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:items-start lg:gap-6 lg:px-8 lg:pb-10">
+        <div className="lg:col-span-2"><MatchManager key={match.id} book={book} match={match} readOnly={!canEdit} disabled={!ready || pending} select={openMatch} save={async next => { const success = await commitBook(next); if (success) clearDraft(); return success; }} />
+          {storageError ? <p role="alert" className="mb-3 text-action">{storageError}</p> : null}
         </div>
-      </header>
+        {/* 試合中いちばん見る領域。モバイルではここが最初の画面に収まるようにする */}
+        <div className="space-y-4">
+          <Scoreboard
+            inning={game.inning}
+            half={game.half}
+            outs={game.outs}
+            homeScore={game.homeScore}
+            awayScore={game.awayScore}
+            bases={game.bases}
+          />
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 sm:px-6 lg:grid-cols-[380px_1fr] lg:px-8">
-        <section className="space-y-5">
-          <Panel title="試合状況" icon={<ClipboardList aria-hidden="true" size={20} />}>
-            <div className="grid grid-cols-3 gap-3">
-              <Metric label="回" value={`${game.inning}回${game.half === "top" ? "表" : "裏"}`} />
-              <Metric label="アウト" value={`${game.outs}`} />
-              <Metric label="打者" value={`${currentLineup.order}番`} />
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <ScoreBox label="ビジター" score={game.awayScore} />
-              <ScoreBox label="ホーム" score={game.homeScore} />
-            </div>
-            <Bases bases={game.bases} />
-          </Panel>
+          <LineupManager key={`${match.id}-${game.events.length}-${match.changes?.length ?? 0}`} book={book} match={match} save={saveMatch} disabled={!ready || pending || !canEdit} />
 
-          <Panel title="打席入力" icon={<Save aria-hidden="true" size={20} />}>
-            <div className="rounded-md border border-line bg-slate-50 p-3">
-              <p className="text-sm text-slate-600">現在の打者</p>
-              <p className="mt-1 text-xl font-bold text-ink">
-                {currentBatter.name}
-                <span className="ml-2 text-sm font-semibold text-slate-500">#{currentBatter.number} {currentBatter.position}</span>
-              </p>
-            </div>
-            <fieldset className="mt-4">
-              <legend className="mb-2 text-sm font-semibold text-slate-700">打席結果</legend>
-              <div className="grid grid-cols-2 gap-2">
-                {resultOptions.map(([value, option]) => (
-                  <button
-                    key={value}
-                    className={`min-h-11 rounded-md border px-3 py-2 text-left text-sm font-semibold transition ${
-                      selectedResult === value
-                        ? "border-blue-700 bg-blue-700 text-white"
-                        : "border-line bg-white text-slate-700 hover:border-blue-500 hover:bg-blue-50"
-                    }`}
-                    type="button"
-                    onClick={() => setSelectedResult(value)}
-                  >
-                    {option.label}
-                    <span className="ml-2 font-mono text-xs opacity-80">{option.notation}</span>
-                  </button>
-                ))}
-              </div>
+          <Panel title="打席入力" icon={<ListChecks size={18} aria-hidden="true" />}>
+            <p className="mb-2 text-sm font-bold text-primary-dark">
+              {game.half === "top" ? teams.away.name : teams.home.name}の攻撃
+            </p>
+            <BatterCard order={currentLineup.order} player={currentBatter} />
+            <p role="status" className="mt-2 text-xs text-muted">
+              {pending ? "保存中…" : !ready ? storageError ? "記録を一時停止しています" : "保存済みの記録を確認しています" : saved ? cloud ? "チームに保存済み" : "このブラウザに保存済み" : "記録すると、このブラウザに自動保存します"}
+            </p>
+            {storageError ? <p role="alert" className="mt-2 text-sm text-action">{storageError}</p> : null}
+            <fieldset disabled={!ready || pending || !canEdit}>
+
+            <fieldset className="mt-3">
+              <legend className="mb-1.5 text-sm font-bold text-ink">打席結果</legend>
+              <ResultPicker value={selectedResult} onChange={(result) => { setSelectedResult(result); clearDraft(); }} />
             </fieldset>
-            <div className="mt-4 flex gap-2">
-              <button
-                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-accent px-4 py-2 font-bold text-white transition hover:bg-orange-700 active:scale-[0.99]"
-                type="button"
-                onClick={recordPlay}
-              >
-                <Check aria-hidden="true" size={18} />
-                確定
-              </button>
-              <button
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-                type="button"
-                onClick={undoPlay}
-                disabled={game.events.length === 0}
-                aria-label="直前プレーを取り消す"
-              >
-                <RotateCcw aria-hidden="true" size={18} />
-                取消
-              </button>
-            </div>
-          </Panel>
-        </section>
 
-        <section className="space-y-5">
-          <Panel title="ライブ共有" icon={<Share2 aria-hidden="true" size={20} />}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[540px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-slate-600">
-                    <th className="px-3 py-2">チーム</th>
-                    {inningLabels.map((inning) => (
-                      <th key={inning} className="px-3 py-2 text-center font-mono">{inning}</th>
-                    ))}
-                    <th className="px-3 py-2 text-center">計</th>
-                  </tr>
-                </thead>
-                <tbody className="font-mono">
-                  <ScoreRow label="ビジター" values={scoreByInning.map((item) => item.topRuns)} total={game.awayScore} />
-                  <ScoreRow label="ホーム" values={scoreByInning.map((item) => item.bottomRuns)} total={game.homeScore} />
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+            <PlayDetailPicker result={selectedResult} value={playDetails} onChange={setPlayDetails} />
+            <RunnerMovementEditor movements={movements} onChange={setEditedMovements}
+              thirdOutKind={thirdOutKind} onThirdOutChange={setThirdOutKind} outs={game.outs}
+              hitError={selectedResult === "hit_error"} />
+            {!isRunnerResult(selectedResult) ? <label className="mt-2 block text-sm">打点（空欄は自動、失策を伴う安打は0）
+              <input type="number" min="0" max="4" aria-label="打点の指定" value={rbiOverride} onChange={event => setRbiOverride(event.target.value)}
+                className="ml-2 min-h-11 w-16 rounded border border-line bg-surface px-2" />
+            </label> : null}
+            {resolution.error === null ? <p className="mt-2 text-sm">このプレー：{resolution.transition.runsScored.length}得点・{resolution.transition.outsAdded}アウト・{resolution.transition.rbi}打点</p> : null}
+            {resolution.error ? <p role="alert" className="mt-2 text-sm text-action">{resolution.error}</p> : null}
+            {isRunnerResult(selectedResult) ? <p className="mt-2 text-xs text-muted">走塁・投手プレーです。現在の打者の打順は進みません。</p> : null}
 
-          <Panel title="紙スコア風プレビュー" icon={<FileText aria-hidden="true" size={20} />}>
-            <div className="overflow-x-auto">
-              <div className="grid min-w-[760px] grid-cols-[120px_repeat(6,1fr)] border border-line bg-white text-sm">
-                <div className="border-b border-r border-line bg-slate-100 p-2 font-bold">打順</div>
-                {inningLabels.map((inning) => (
-                  <div key={inning} className="border-b border-r border-line bg-slate-100 p-2 text-center font-bold">
-                    {inning}回
-                  </div>
-                ))}
-                {lineup.map((slot) => {
-                  const player = getPlayer(slot.playerId);
-                  const playerEvents = game.events.filter((event) => event.batterId === player.id);
+            </fieldset>
 
-                  return (
-                    <div key={player.id} className="contents">
-                      <div className="border-r border-t border-line p-2">
-                        <p className="font-bold">{slot.order}. {player.name}</p>
-                        <p className="text-xs text-slate-500">#{player.number} {slot.position}</p>
-                      </div>
-                      {inningLabels.map((inning) => {
-                        const event = playerEvents.find((item) => item.inning === Number(inning));
-
-                        return (
-                          <ScoreCell key={`${player.id}-${inning}`} notation={event?.notation} scored={Boolean(event?.runsScored.includes(player.id))} />
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+            {/*
+              主操作はモバイルでは画面下に固定し、スクロール中でも押せるようにする。
+              main 側に同じ高さの下余白を確保しているので、下のセクションを隠さない。
+              lg 以上ではカード内に戻す。
+            */}
+            {canEdit ? <div data-score-recordbar className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-raised sm:px-6 lg:static lg:mt-3 lg:border-0 lg:px-0 lg:pb-0 lg:pt-0 lg:shadow-none">
+              <div className="mx-auto max-w-[1280px] lg:max-w-none">
+                <RecordBar
+                  batterName={isRunnerResult(selectedResult) ? "走者" : currentBatter.name}
+                  canRecord={canEdit && ready && !resolution.error}
+                  pending={pending}
+                  resultLabel={describePlay(selectedResult, playDetails)}
+                  canUndo={canEdit && ready && !pending && (game.events.length > 0 || !!match.changes?.length)}
+                  onRecord={recordPlay}
+                  onUndo={undoPlay}
+                />
               </div>
-            </div>
+            </div> : null}
+          </Panel>
+        </div>
+
+        {/* 試合中の入力を邪魔しない下位セクション */}
+        <div className="mt-4 space-y-4 lg:mt-0">
+          <Panel
+            title="イニング別スコア"
+            icon={<Table2 size={18} aria-hidden="true" />}
+            description="保存している試合の得点です。"
+          >
+            <LineScore
+              currentInning={game.inning}
+              innings={innings}
+              rows={buildLineScoreRows(scoreByInning, game.awayScore, game.homeScore, teams)}
+            />
           </Panel>
 
-          <Panel title="直近プレー" icon={<ClipboardList aria-hidden="true" size={20} />}>
-            <div className="space-y-2">
-              {game.events.length === 0 ? (
-                <p className="rounded-md border border-dashed border-line p-4 text-sm text-slate-600">まだプレーは記録されていません。</p>
-              ) : (
-                game.events.slice(-6).reverse().map((event) => {
-                  const batter = getPlayer(event.batterId);
-
-                  return (
-                    <div key={event.id} className="flex items-center justify-between gap-3 rounded-md border border-line bg-white p-3">
-                      <div>
-                        <p className="font-semibold text-ink">{event.inning}回{event.half === "top" ? "表" : "裏"} {batter.name}</p>
-                        <p className="text-sm text-slate-600">
-                          {resultLabels[event.result].label} / 打点 {event.rbi} / 追加アウト {event.outsAdded}
-                        </p>
-                      </div>
-                      <span className="rounded-md bg-slate-100 px-2 py-1 font-mono text-sm font-bold text-slate-700">{event.notation}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+          <Panel title="直近プレー" icon={<ClipboardList size={18} aria-hidden="true" />}>
+            <RecentPlays events={game.events} />
           </Panel>
-        </section>
-      </div>
-    </main>
-  );
-}
 
-function Panel({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-white p-4">
-      <div className="mb-4 flex items-center gap-2 text-ink">
-        {icon}
-        <h2 className="text-lg font-bold">{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-line bg-white p-3">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
-      <p className="mt-1 font-mono text-xl font-bold text-ink">{value}</p>
-    </div>
-  );
-}
-
-function ScoreBox({ label, score }: { label: string; score: number }) {
-  return (
-    <div className="rounded-md bg-field-900 p-3 text-white">
-      <p className="text-sm text-field-100">{label}</p>
-      <p className="font-mono text-4xl font-bold">{score}</p>
-    </div>
-  );
-}
-
-function Bases({ bases }: { bases: RunnerState }) {
-  const baseItems = [
-    { label: "二塁", active: bases.second },
-    { label: "三塁", active: bases.third },
-    { label: "一塁", active: bases.first }
-  ];
-
-  return (
-    <div className="mt-4 grid grid-cols-3 gap-2" aria-label="走者状況">
-      {baseItems.map((base) => (
-        <div
-          key={base.label}
-          className={`min-h-16 rounded-md border p-2 text-center ${base.active ? "border-field-700 bg-field-100" : "border-line bg-slate-50"}`}
-        >
-          <p className="text-xs font-semibold text-slate-500">{base.label}</p>
-          <p className="mt-1 text-sm font-bold text-ink">{base.active ? getPlayer(base.active).name : "空"}</p>
         </div>
-      ))}
-    </div>
-  );
-}
 
-function StatusBadge({ active, label }: { active: boolean; label: string }) {
-  return (
-    <span className={`rounded-md px-3 py-2 text-sm font-bold ${active ? "bg-field-100 text-field-900" : "bg-orange-100 text-orange-900"}`}>
-      {label}
-    </span>
-  );
-}
-
-function ScoreRow({ label, values, total }: { label: string; values: number[]; total: number }) {
-  return (
-    <tr className="border-b border-line last:border-0">
-      <td className="px-3 py-3 font-sans font-bold text-ink">{label}</td>
-      {values.map((value, index) => (
-        <td key={`${label}-${index}`} className="px-3 py-3 text-center">{value}</td>
-      ))}
-      <td className="bg-slate-100 px-3 py-3 text-center font-bold">{total}</td>
-    </tr>
-  );
-}
-
-function ScoreCell({ notation, scored }: { notation?: string; scored: boolean }) {
-  return (
-    <div className="relative min-h-24 border-r border-t border-line p-2">
-      <div className="absolute left-1/2 top-1/2 h-11 w-11 -translate-x-1/2 -translate-y-1/2 rotate-45 border border-slate-300" aria-hidden="true" />
-      {notation ? (
-        <div className="relative z-10 flex h-full min-h-20 flex-col items-center justify-center gap-1">
-          <span className="rounded-md bg-white px-2 py-1 font-mono text-sm font-bold text-ink">{notation}</span>
-          {scored ? <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-white">得点</span> : null}
+        {/* 紙スコアは横幅が要るので、lg以上では下段の全幅に置いてマスを大きく見せる */}
+        <div className="mt-4 lg:col-span-2 lg:mt-2">
+          <Panel
+            title="紙スコア風プレビュー"
+            icon={<FileText size={18} aria-hidden="true" />}
+            description="入力済みの記録から作る出力プレビューです。ここでは編集できません。"
+          >
+            <PaperScorePreview events={game.events} innings={innings} currentInning={game.inning} currentHalf={game.half} />
+          </Panel>
         </div>
-      ) : null}
+      </main>
+      </>}
     </div>
+    </MatchContext.Provider>
   );
 }

@@ -3,8 +3,33 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* 和文を主役にしたシステムフォント。会場の通信が不安定でも表示が崩れないようWebフォントは読み込まない */
+  --font-sans: system-ui, -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* 面。将来ダークモードを足すときは、この色定義ブロックだけを差し替える */
+  --color-page: #f8fafc;
+  --color-surface: #ffffff;
+  --color-sunken: #f2f5f8;
+
+  /* 文字と罫。muted は白・薄面いずれでもコントラスト比4.5:1以上 */
+  --color-ink: #172033;
+  --color-muted: #596579;
+  --color-line: #d7dde5;
+
+  /* ブランドの緑。選択状態・現在地・攻撃中の表現だけに使う */
+  --color-primary: #247044;
+  --color-primary-dark: #173f2a;
+  --color-primary-soft: #e7f4ea;
+
+  /* 画面内で唯一の主要CTA。白文字とのコントラスト比を4.5:1以上に保つため #ea580c より濃くしている */
+  --color-action: #c2410c;
+  --color-action-hover: #9a3412;
+
+  /* 危険・エラー */
+  --color-danger: #b91c1c;
+
   color-scheme: light;
 }
 
@@ -14,15 +39,16 @@
 
 html {
   min-width: 320px;
-  background: #f8fafc;
+  background: var(--color-page);
 }
 
 body {
   margin: 0;
-  color: #1e293b;
-  background:
-    linear-gradient(180deg, rgba(36, 112, 68, 0.08), rgba(248, 250, 252, 0) 360px),
-    #f8fafc;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -36,9 +62,17 @@ button {
   touch-action: manipulation;
 }
 
+/* チーム管理中はスコアの固定ボタンを隠し、フォームの操作を妨げない。 */
+@media (max-width: 1023px) {
+  body:has(details[data-account-panel][open]) [data-score-recordbar] {
+    display: none;
+  }
+}
+
+/* フォーカスリングは消さない。offset の隙間に下地の白が出るので、選択中の緑ボタン上でも視認できる */
 :focus-visible {
-  outline: 3px solid #2563eb;
-  outline-offset: 3px;
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
