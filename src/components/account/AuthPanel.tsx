@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { describeAuthFailure, getAuthFailureLog } from "@/lib/auth-error";
 import { supabase } from "@/lib/supabase";
 
 export function AuthPanel() {
@@ -28,10 +29,12 @@ export function AuthPanel() {
           });
           if (signInError) throw signInError;
           setSent(true);
-        } catch {
-          setError(
-            "ログインメールを送れませんでした。アドレスを確認し、少し待ってからお試しください。",
+        } catch (caught) {
+          console.error(
+            "ログインメールの送信に失敗しました",
+            getAuthFailureLog(caught),
           );
+          setError(describeAuthFailure(caught));
         } finally {
           setBusy(false);
         }
