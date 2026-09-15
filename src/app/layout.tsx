@@ -11,7 +11,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // 画面下の固定操作バーで safe-area-inset を使うために必要
   viewportFit: "cover",
-  themeColor: "#ffffff"
+  themeColor: "#173f2a"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="スコア連携アプリ">
+  <rect width="512" height="512" rx="112" fill="#173f2a"/>
+  <path
+    d="M256 80 432 256 256 432 80 256Z"
+    fill="#247044"
+    stroke="#f8fafc"
+    stroke-width="28"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M256 116 396 256 256 396 116 256Z"
+    fill="none"
+    stroke="#e7f4ea"
+    stroke-width="10"
+    stroke-dasharray="18 16"
+    stroke-linecap="round"
+  />
+  <rect x="224" y="48" width="64" height="64" rx="10" fill="#f8fafc" transform="rotate(45 256 80)"/>
+  <rect x="400" y="224" width="64" height="64" rx="10" fill="#f8fafc" transform="rotate(45 432 256)"/>
+  <rect x="48" y="224" width="64" height="64" rx="10" fill="#f8fafc" transform="rotate(45 80 256)"/>
+  <path d="m256 407 38 22-14 40h-48l-14-40Z" fill="#c2410c" stroke="#f8fafc" stroke-width="12" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="70" fill="#f8fafc"/>
+  <path d="M221 203c24 28 24 78 0 106M291 203c-24 28-24 78 0 106" fill="none" stroke="#c2410c" stroke-width="12" stroke-linecap="round"/>
+  <path d="m214 220 16 6m-19 18 17 3m-17 21 17-3m-14 27 16-6m68-66-16 6m19 18-17 3m17 21-17-3m14 27-16-6" fill="none" stroke="#c2410c" stroke-width="7" stroke-linecap="round"/>
+</svg>
